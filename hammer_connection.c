@@ -1,13 +1,14 @@
 #include "hammer_connection.h"
-#include "hammer_config.h"
+#include "hammer_macros.h"
 #include "hammer_list.h"
 #include "hammer_sched.h"
 #include "hammer_memory.h"
+#include "hammer_config.h"
+#include "hammer_socket.h"
 
 int hammer_conn_job_add(hammer_connection_t *conn, int length)
 {
 	hammer_job_t *new_job = hammer_mem_malloc(sizeof(hammer_job_t));
-	hammer_job_t *job_list;
 	
 	new_job->job_body_ptr = conn->body_ptr + conn->body_length;
 	new_job->job_body_length = length;
@@ -21,7 +22,7 @@ int hammer_conn_job_add(hammer_connection_t *conn, int length)
 
 int hammer_conn_job_del(hammer_job_t *job)
 {
-	hammer_list_del(job->_head);
+	hammer_list_del(&(job->_head));
 	hammer_mem_free(job);
 
 	return 0;
@@ -30,7 +31,7 @@ int hammer_conn_job_del(hammer_job_t *job)
 
 
 // connection management
-void hammer_init_connection(hammer_connection_t *conn, hammer_connection_t *r_conn)
+void hammer_init_connection(hammer_connection_t *conn)
 {
 	conn->socket = 0;
 	conn->ssl = 0; // ssl not enabled by default
@@ -51,7 +52,7 @@ hammer_connection_t *hammer_get_connection()
 void hammer_free_connection(hammer_connection_t *conn)
 {
 	hammer_mem_free(conn);
-	return NULL;
+	return;
 }
 
 int hammer_close_connection(hammer_connection_t *conn)
@@ -65,7 +66,7 @@ int hammer_close_connection(hammer_connection_t *conn)
 
 	hammer_socket_close(conn->socket);
 
-	job_list = hammer_conn_get_job_list(r_conn);
+	job_list = conn->job_list;
 	hammer_list_foreach(job_head, job_list) {
 		this_job = hammer_list_entry(job_head, hammer_job_t, _head);
 		hammer_conn_job_del(this_job);

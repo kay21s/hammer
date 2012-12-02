@@ -7,7 +7,6 @@
 #include "hammer.h"
 #include "hammer_config.h"
 #include "hammer_memory.h"
-#include "hammer_http.h"
 #include "hammer_macros.h"
 
 inline ALLOCSZ_ATTR(1)

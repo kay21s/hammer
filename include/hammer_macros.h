@@ -17,9 +17,12 @@
 #define HAMMER_WARN     0x1002
 #define HAMMER_BUG      0x1003
 
+#define hammer_print printf
+
 #define hammer_info(...)  hammer_print(HAMMER_INFO, __VA_ARGS__)
 #define hammer_err(...)   hammer_print(HAMMER_ERR, __VA_ARGS__)
 #define hammer_warn(...)  hammer_print(HAMMER_WARN, __VA_ARGS__)
+#define hammer_trace(...)  hammer_print(HAMMER_WARN, __VA_ARGS__)
 
 /* Transport type */
 #ifndef ARRAY_SIZE
@@ -85,5 +88,8 @@
 #else
  #define HAMMER_EXPORT
 #endif
+
+// TRACE
+#define HAMMER_TRACE(...) do {} while (0)
 
 #endif

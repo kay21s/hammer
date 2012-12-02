@@ -4,21 +4,27 @@
 #include <errno.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <string.h>
 
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/epoll.h>
 
+#include "hammer_epoll.h"
+#include "hammer_memory.h"
+#include "hammer_handler.h"
+#include "hammer_macros.h"
 
-hammer_epoll_handlers *hammer_epoll_set_handlers(void (*read) (hammer_connection_t *),
+
+hammer_epoll_handlers_t *hammer_epoll_set_handlers(void (*read) (hammer_connection_t *),
                                          void (*write) (hammer_connection_t *),
                                          void (*error) (hammer_connection_t *),
                                          void (*close) (hammer_connection_t *),
                                          void (*timeout) (hammer_connection_t *))
 {
-	hammer_epoll_handlers *handler;
+	hammer_epoll_handlers_t *handler;
 
-	handler = malloc(sizeof(hammer_epoll_handlers));
+	handler = hammer_mem_malloc(sizeof(hammer_epoll_handlers_t));
 	handler->read = (void *) read;
 	handler->write = (void *) write;
 	handler->error = (void *) error;

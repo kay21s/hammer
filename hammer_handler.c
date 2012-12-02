@@ -1,35 +1,68 @@
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <stdio.h>
+
 #include "hammer_connection.h"
 #include "hammer_sched.h"
 #include "hammer_epoll.h"
 #include "hammer_config.h"
 #include "hammer_socket.h"
 #include "hammer_list.h"
+#include "hammer_macros.h"
+#include "hammer.h"
 
+/* connect to server */
 int hammer_handler_connect(hammer_connection_t *conn)
 {
-	struct sockaddr address;
+	struct sockaddr_in address;
 	int ret, socket;
 	hammer_sched_t *sched = hammer_sched_get_sched_struct();
 
-	socket = hammer_socket_create(AF_INET, SOCK_STREAM, 0);
+	socket = hammer_socket_create();
 
-	address.sin_family = PF_INET;
+	address.sin_family = AF_INET;
 	address.sin_addr.s_addr = inet_addr(config->server_ip);
 	address.sin_port = htons(config->server_port);
 
-	ret = hammer_socket_connect(socket, &address, sizeof(address));
+	ret = hammer_socket_connect(socket,(struct sockaddr *)&address, (socklen_t)sizeof(address));
 	if (ret != 0) {
 		printf("connect error\n");
 		return -1;
 	}
 
 	/* Assign socket to worker thread */
-	ret = hammer_sched_add_connection(remote_fd, sched, NULL);
+	ret = hammer_sched_add_connection(socket, sched, conn);
 	if (ret == -1) {
-		hammer_socket_close(remote_fd);
+		hammer_socket_close(socket);
 	}
 
 	return 0;
+}
+
+int hammer_handler_listen()
+{
+	int socket, ret;
+	struct sockaddr_in proxy_address;
+
+	socket = hammer_socket_create();
+
+	proxy_address.sin_family = AF_INET;
+	proxy_address.sin_addr.s_addr = inet_addr(config->listen_ip);
+	proxy_address.sin_port = htons(config->listen_port);
+
+	ret = hammer_socket_bind(socket, (struct sockaddr *)&proxy_address, sizeof(proxy_address));
+	if (ret == -1) {
+		hammer_warn("error bind socket\n");
+		return -1;
+	}
+
+	ret = hammer_socket_listen(socket, HAMMER_MAX_CONN);
+	if (ret == -1) {
+		hammer_warn("error listen socket\n");
+		return -1;
+	}
+
+	return socket;
 }
 
 /*
@@ -56,9 +89,9 @@ int hammer_handler_close(hammer_connection_t *conn)
 
 int hammer_handler_read(hammer_connection_t *conn)
 {
-	int ret;
-	int bytes;
-	struct hammer_connection *r_conn;
+	int bytes, available;
+	hammer_connection_t *r_conn;
+	hammer_sched_t *sched = hammer_sched_get_sched_struct();
 
 //			hammer_epoll_state_set(sched->epoll_fd, socket,
 //					HAMMER_EPOLL_READ,
@@ -73,18 +106,18 @@ int hammer_handler_read(hammer_connection_t *conn)
 	/* Read incomming data */
 	bytes = hammer_socket_read(
 			conn->socket,
-			conn->body_ptr + conn->body_length;
+			conn->body_ptr + conn->body_length,
 			available);
 
 	if (bytes <= 0) {
 		// FIXME
-		if (errno == EAGAIN) {
-			return 1;
-		} else {
+		//if (errno == EAGAIN) {
+		//	return 1;
+		//} else {
 			//hammer_session_remove(socket);
 			printf("Hey!!!\n");
 			return -1;
-		}
+		//}
 
 	} else if (bytes > 0) {
 		hammer_conn_job_add(conn, bytes);
@@ -96,12 +129,11 @@ int hammer_handler_read(hammer_connection_t *conn)
 		}
 
 		// activate the other socket to be write to
-		r_conn = conn->r_conn;
-		if (r_conn == NULL) {
+		if (conn->r_conn == NULL) {
 			// the connection has not been established, now we connect it
-			r_conn = hammer_proxy_connect(conn);
+			hammer_handler_connect(conn);
 		}
-
+		r_conn = conn->r_conn;
 
 		hammer_epoll_change_mode(sched->epoll_fd,
 			r_conn->socket,
@@ -114,8 +146,8 @@ int hammer_handler_read(hammer_connection_t *conn)
 
 int hammer_handler_write(hammer_connection_t *conn)
 {
-	int ret = -1;
-	hammer_connection_t *r_conn
+	int bytes_send;
+	hammer_connection_t *r_conn;
 
 	// this is the socket to write to, now we get the socket that has read something
 	r_conn = conn->r_conn;
@@ -123,7 +155,7 @@ int hammer_handler_write(hammer_connection_t *conn)
 	hammer_job_t *this_job;
 	struct hammer_list *job_list, *job_head;
 
-	job_list = hammer_conn_get_job_list(r_conn);
+	job_list = r_conn->job_list;
 	hammer_list_foreach(job_head, job_list) {
 		this_job = hammer_list_entry(job_head, hammer_job_t, _head);
 
@@ -133,7 +165,7 @@ int hammer_handler_write(hammer_connection_t *conn)
 			this_job->job_body_length);
 
 		if (bytes_send != this_job->job_body_length) {
-			printf("Not all are send \n")
+			printf("Not all are send \n");
 				return -1;
 		}
 

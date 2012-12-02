@@ -27,14 +27,14 @@ typedef struct hammer_connection_s
 	int body_size; // total size
 	char *body_ptr;
 
-	hammer_connection_t *r_conn;
+	struct hammer_connection_s *r_conn;
 
 	struct hammer_list *job_list;
 } hammer_connection_t;
 
 int hammer_conn_job_add(hammer_connection_t *conn, int length);
 int hammer_conn_job_del(hammer_job_t *job);
-void hammer_init_connection(hammer_connection_t *conn, hammer_connection_t *r_conn);
+void hammer_init_connection(hammer_connection_t *conn);
 hammer_connection_t *hammer_get_connection();
 void hammer_free_connection(hammer_connection_t *conn);
 int hammer_close_connection(hammer_connection_t *conn);

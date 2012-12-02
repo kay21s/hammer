@@ -5,8 +5,6 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 
-#include "hammer_iov.h"
-
 #ifndef SOCK_NONBLOCK
 #define SOCK_NONBLOCK 04000
 #endif
@@ -24,11 +22,13 @@ int hammer_socket_set_tcp_defer_accept(int sockfd);
 int hammer_socket_set_nonblocking(int sockfd);
 
 int hammer_socket_create(void);
-int hammer_socket_connect(char *host, int port);
+int hammer_socket_connect(int socket_fd, struct sockaddr *addr, socklen_t addrlen);
 int hammer_socket_accept(int server_fd);
 int hammer_socket_write(int socket_fd, const void *buf, size_t count);
 int hammer_socket_read(int socket_fd, void *buf, int count);
 int hammer_socket_close(int socket);
+int hammer_socket_bind(int socket_fd, struct sockaddr *addr, socklen_t addrlen);
+int hammer_socket_listen(int socket_fd, int backlog);
 
 //int hammer_socket_reset(int socket);
 //int hammer_socket_server(int port, char *listen_addr);

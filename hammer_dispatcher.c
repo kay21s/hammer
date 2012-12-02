@@ -1,10 +1,15 @@
 #include <pthread.h>
+#include <unistd.h>
+#include <stdio.h>
+
 #include "hammer_sched.h"
 #include "hammer_epoll.h"
 #include "hammer_config.h"
 #include "hammer_socket.h"
 #include "hammer_connection.h"
 #include "hammer_dispatcher.h"
+#include "hammer_macros.h"
+#include "hammer_handler.h"
 
 int hammer_dispatcher_loop(int server_fd)
 {
@@ -43,6 +48,7 @@ int hammer_dispatcher_loop(int server_fd)
 int hammer_dispatcher()
 {
 	int i, ready = 0;
+	int server_fd;
 
 	// waiting for the launch of workers
 	while (1) {
@@ -57,7 +63,11 @@ int hammer_dispatcher()
 		usleep(10000);
 	}
 
+	server_fd = hammer_handler_listen();
+
 	/* Server loop, let's listen for incomming clients */
-	hammer_dispatcher_loop(config->server_fd);
+	hammer_dispatcher_loop(server_fd);
+
+	return 0;
 }
 

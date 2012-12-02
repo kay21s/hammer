@@ -9,17 +9,14 @@
 
 #include "hammer.h"
 #include "hammer_connection.h"
-#include "hammer_scheduler.h"
+#include "hammer_sched.h"
+#include "hammer_handler.h"
 #include "hammer_memory.h"
 #include "hammer_epoll.h"
 #include "hammer_config.h"
-#include "hammer_utils.h"
 #include "hammer_macros.h"
 
 pthread_key_t worker_sched_node;
-
-static pthread_mutex_t mutex_sched_init = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t mutex_worker_init = PTHREAD_MUTEX_INITIALIZER;
 
 void *hammer_epoll_start(int efd, hammer_epoll_handlers_t *handler, int max_events)
 {
@@ -83,7 +80,7 @@ void *hammer_epoll_start(int efd, hammer_epoll_handlers_t *handler, int max_even
 
 /* created thread, all this calls are in the thread context */
 //FIXME: static function ? why ?
-static void *hammer_cpu_worker_loop(void *thread_sched)
+void *hammer_cpu_worker_loop(void *thread_sched)
 {
 	hammer_sched_t *sched = thread_sched;
 	hammer_epoll_handlers_t *handler;

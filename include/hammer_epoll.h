@@ -1,33 +1,34 @@
+#ifndef HAMMER_EPOLL_H
+#define HAMMER_EPOLL_H
+
 #include <sys/epoll.h>
+#include "hammer_connection.h"
 
-#ifndef MK_EPOLL_H
-#define MK_EPOLL_H
-
-#define MK_EPOLL_READ     0
-#define MK_EPOLL_WRITE    1
-#define MK_EPOLL_RW       2
-#define MK_EPOLL_SLEEP    3
-#define MK_EPOLL_WAKEUP   4
+#define HAMMER_EPOLL_READ     0
+#define HAMMER_EPOLL_WRITE    1
+#define HAMMER_EPOLL_RW       2
+#define HAMMER_EPOLL_SLEEP    3
+#define HAMMER_EPOLL_WAKEUP   4
 
 /* Epoll timeout is 3 seconds */
-#define MK_EPOLL_WAIT_TIMEOUT 3000
+#define HAMMER_EPOLL_WAIT_TIMEOUT 3000
 
-#define MK_EPOLL_LEVEL_TRIGGERED 2        /* default */
-#define MK_EPOLL_EDGE_TRIGGERED  EPOLLET
+#define HAMMER_EPOLL_LEVEL_TRIGGERED 2        /* default */
+#define HAMMER_EPOLL_EDGE_TRIGGERED  EPOLLET
 
 #ifndef EPOLLRDHUP
 #define EPOLLRDHUP 0x2000
 #endif
 
-#define MK_EPOLL_STATE_INDEX_CHUNK 64
+#define HAMMER_EPOLL_STATE_INDEX_CHUNK 64
 
 typedef struct hammer_epoll_handlers_s
 {
-	int (*read) (int);
-	int (*write) (int);
-	int (*error) (int);
-	int (*close) (int);
-	int (*timeout) (int);
+	int (*read) (hammer_connection_t *);
+	int (*write) (hammer_connection_t *);
+	int (*error) (hammer_connection_t *);
+	int (*close) (hammer_connection_t *);
+	int (*timeout) (hammer_connection_t *);
 } hammer_epoll_handlers_t;
 
 /* Monkey epoll calls */
