@@ -1,19 +1,27 @@
 CC = gcc
 
-CFLAGS = -Wall -O -lpthread
+CFLAGS = -Wall -O
+LIBS = -lpthread
 
-INCLUDE = include
+INCLUDE_DIR = ./include
+OBJS_DIR = ./objs
 
-TARGET = project
+vpath % objs
+
+TARGET = hammer
+SOURCES = $(wildcard *.c)
+#OBJS = $(pathsubst %.c, $(OBJS_DIR)/%.o, $(SOURCES))
+OBJS = hammer.o hammer_sched.o hammer_connection.o hammer_dispatcher.o hammer_cpu_worker.o \
+	hammer_socket.o hammer_epoll.o hammer_memory.o hammer_handler.o
 
 %.o: %.c
-	$(CC) $(CFLAGS) -I $(INCLUDE) -c $< -o $@
+	$(CC) $(CFLAGS) -I $(INCLUDE_DIR) -c $< -o $@
+#	$(CC) $(CFLAGS) -I $(INCLUDE_DIR) -c $< -o $@
 
-SOURCES = $(wildcard *.c *.cpp)
-OBJS = $(patsubst %.c,%.o,$(patsubst %.cpp,%.o,$(SOURCES)))
+#OBJS = $(OBJS_DIR)/$(patsubst %.c,%.o,$(patsubst %.cpp,%.o,$(SOURCES)))
 
 $(TARGET) : $(OBJS)
-	$(CC) $(OBJS) -o $(TARGET)
+	$(CC) $(OBJS) -o $(TARGET) $(LIBS)
 
 clean:
-	rm -rf *.o hammer
+	rm -rf *.o  hammer

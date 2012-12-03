@@ -17,12 +17,15 @@
 #define HAMMER_WARN     0x1002
 #define HAMMER_BUG      0x1003
 
-#define hammer_print printf
 
-#define hammer_info(...)  hammer_print(HAMMER_INFO, __VA_ARGS__)
-#define hammer_err(...)   hammer_print(HAMMER_ERR, __VA_ARGS__)
-#define hammer_warn(...)  hammer_print(HAMMER_WARN, __VA_ARGS__)
-#define hammer_trace(...)  hammer_print(HAMMER_WARN, __VA_ARGS__)
+//#define hammer_info(...)  hammer_print(HAMMER_INFO, __VA_ARGS__)
+//#define hammer_err(...)   hammer_print(HAMMER_ERR, __VA_ARGS__)
+//#define hammer_warn(...)  hammer_print(HAMMER_WARN, __VA_ARGS__)
+//#define hammer_trace(...)  hammer_print(HAMMER_WARN, __VA_ARGS__)
+#define hammer_info  printf
+#define hammer_err   printf
+#define hammer_warn  printf
+#define hammer_trace  printf
 
 /* Transport type */
 #ifndef ARRAY_SIZE

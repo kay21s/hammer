@@ -18,7 +18,7 @@ int hammer_dispatcher_loop(int server_fd)
 
 	/* Activate TCP_DEFER_ACCEPT */
 	if (hammer_socket_set_tcp_defer_accept(server_fd) != 0) {
-		hammer_warn("TCP_DEFER_ACCEPT failed");
+		hammer_warn("TCP_DEFER_ACCEPT failed\n");
 	}
 
 	/* Accept new connections */

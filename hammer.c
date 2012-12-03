@@ -1,6 +1,6 @@
-#include <pthread.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <pthread.h>
 
 #include "hammer.h"
 #include "hammer_config.h"
@@ -50,6 +50,8 @@ int hammer_sched_init()
 	for (i = 0; i < config->workers; i ++) {
 		hammer_init_sched_node((hammer_sched_t *)&(sched_list[i]), -1, -1);
 	}
+
+	return 0;
 }
 
 void hammer_thread_keys_init()
@@ -129,7 +131,9 @@ int hammer_dispatcher_launch_cpu_workers()
 int main()
 {
 	hammer_sched_init();
+	//hammer_connection_init();
 	hammer_thread_keys_init();
+	
 	config = hammer_get_config();
 
 	/* Launch workers first*/
@@ -137,4 +141,6 @@ int main()
 //	hammer_dispatcher_launch_gpu_workers();
 	/* the main function becomes the dispatcher and enters the dispatcher loop*/
 	hammer_dispatcher();
+
+	return 0;
 }

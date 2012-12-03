@@ -41,6 +41,7 @@ hammer_epoll_handlers_t *hammer_epoll_set_handlers(void (*read) (hammer_connecti
 						void (*close) (hammer_connection_t *),
 						void (*timeout) (hammer_connection_t *));
 
+int hammer_epoll_wait(int efd, struct epoll_event **events, int max_events);
 int hammer_epoll_add(int efd, int fd, int mode, int behavior, void *user_ptr);
 int hammer_epoll_del(int efd, int fd);
 int hammer_epoll_change_mode(int efd, int fd, int mode, int behavior);

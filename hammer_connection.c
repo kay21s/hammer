@@ -29,8 +29,13 @@ int hammer_conn_job_del(hammer_job_t *job)
 }
 
 
+void hammer_connection_init()
+{
 
-// connection management
+}
+
+
+// init a connection struct
 void hammer_init_connection(hammer_connection_t *conn)
 {
 	conn->socket = 0;
