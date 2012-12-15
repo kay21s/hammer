@@ -1,6 +1,6 @@
 CC = gcc
 
-CFLAGS = -Wall -O
+CFLAGS = -Wall -g
 LIBS = -lpthread
 
 INCLUDE_DIR = ./include

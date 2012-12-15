@@ -16,14 +16,10 @@
 
 int hammer_socket_create()
 {
-    int sockfd;
+	ssize_t ret;
+	ret = socket(AF_INET, SOCK_STREAM, 0);
 
-    if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
-        printf("client: socket");
-        return -1;
-    }
-
-    return sockfd;
+	return ret;
 }
 
 int hammer_socket_set_tcp_defer_accept(int sockfd)
@@ -40,8 +36,6 @@ int hammer_socket_accept(int server_fd)
 
 	socklen_t socket_size = sizeof(struct sockaddr);
 	remote_fd = accept(server_fd, &sock_addr, &socket_size);
-	/* Set this socket non-blocking */
-	hammer_socket_set_nonblocking(remote_fd);
 
 	return remote_fd;
 }

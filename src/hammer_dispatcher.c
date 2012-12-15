@@ -23,7 +23,7 @@ int hammer_dispatcher_loop(int server_fd)
 
 	/* Accept new connections */
 	while (1) {
-		remote_fd = hammer_socket_accept(server_fd);
+		remote_fd = hammer_handler_accept(server_fd);
 		if (hammer_unlikely(remote_fd == -1)) {
 			return -1;
 		}

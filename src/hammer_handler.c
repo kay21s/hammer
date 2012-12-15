@@ -1,6 +1,9 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 #include <stdio.h>
+#include <unistd.h>
 
 #include "hammer_connection.h"
 #include "hammer_sched.h"
@@ -45,9 +48,13 @@ int hammer_handler_listen()
 	struct sockaddr_in proxy_address;
 
 	socket = hammer_socket_create();
+	if (socket < 0) {
+		hammer_warn("socket create failure\n");
+		return -1;
+	}
 
 	proxy_address.sin_family = AF_INET;
-	proxy_address.sin_addr.s_addr = inet_addr(config->listen_ip);
+	//proxy_address.sin_addr.s_addr = inet_addr(config->listen_ip);
 	proxy_address.sin_port = htons(config->listen_port);
 
 	ret = hammer_socket_bind(socket, (struct sockaddr *)&proxy_address, sizeof(proxy_address));
@@ -61,15 +68,24 @@ int hammer_handler_listen()
 		hammer_warn("error listen socket\n");
 		return -1;
 	}
-
 	return socket;
 }
 
-/*
-int hammer_handler_accept()
+int hammer_handler_accept(int server_socket)
 {
-	return ret;
-}*/
+	int remote_socket;
+
+	remote_socket = hammer_socket_accept(server_socket);
+	if (remote_socket < 0) {
+		hammer_warn("error socket accept\n");
+		return -1;
+	}
+
+	/* Set this socket non-blocking */
+	hammer_socket_set_nonblocking(remote_socket);
+
+	return remote_socket;
+}
 
 // we delete both the two connections
 int hammer_handler_error(hammer_connection_t *conn)
@@ -89,7 +105,7 @@ int hammer_handler_close(hammer_connection_t *conn)
 
 int hammer_handler_read(hammer_connection_t *conn)
 {
-	int bytes, available;
+	int recv, available;
 	hammer_connection_t *r_conn;
 	hammer_sched_t *sched = hammer_sched_get_sched_struct();
 
@@ -101,15 +117,16 @@ int hammer_handler_read(hammer_connection_t *conn)
 	available = conn->body_size - conn->body_length;
 	if (available <= 0) {
 		printf("small available buffer!\n");
+		exit(0);
 	}
 
 	/* Read incomming data */
-	bytes = hammer_socket_read(
+	recv = hammer_socket_read(
 			conn->socket,
 			conn->body_ptr + conn->body_length,
 			available);
 
-	if (bytes <= 0) {
+	if (recv <= 0) {
 		// FIXME
 		//if (errno == EAGAIN) {
 		//	return 1;
@@ -119,8 +136,8 @@ int hammer_handler_read(hammer_connection_t *conn)
 			return -1;
 		//}
 
-	} else if (bytes > 0) {
-		hammer_conn_job_add(conn, bytes);
+	} else if (recv > 0) {
+		hammer_conn_job_add(conn, recv);
 		
 		if (conn->body_length + 1 >= conn->body_size) {
 			//hammer_session_remove(socket);
@@ -140,13 +157,13 @@ int hammer_handler_read(hammer_connection_t *conn)
 			HAMMER_EPOLL_WRITE, HAMMER_EPOLL_LEVEL_TRIGGERED);
 	}
 
-	return bytes;
+	return recv;
 }
 
 
 int hammer_handler_write(hammer_connection_t *conn)
 {
-	int bytes_send;
+	int send;
 	hammer_connection_t *r_conn;
 
 	// this is the socket to write to, now we get the socket that has read something
@@ -159,14 +176,14 @@ int hammer_handler_write(hammer_connection_t *conn)
 	hammer_list_foreach(job_head, job_list) {
 		this_job = hammer_list_entry(job_head, hammer_job_t, _head);
 
-		bytes_send = hammer_socket_write(
+		send = hammer_socket_write(
 			conn->socket, 
 			this_job->job_body_ptr, 
 			this_job->job_body_length);
 
-		if (bytes_send != this_job->job_body_length) {
+		if (send != this_job->job_body_length) {
 			printf("Not all are send \n");
-				return -1;
+			return -1;
 		}
 
 		hammer_conn_job_del(this_job);

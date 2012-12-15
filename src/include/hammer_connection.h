@@ -2,6 +2,7 @@
 #define HAMMER_CONNECTION_H
 
 #include "hammer_list.h"
+#include "openssl/ssl.h"
 
 #define HAMMER_EVENT_READ	0
 #define HAMMER_EVENT_WRITE	1
@@ -30,6 +31,11 @@ typedef struct hammer_connection_s
 	struct hammer_connection_s *r_conn;
 
 	struct hammer_list *job_list;
+
+	// SSL structs
+	SSL *ssl_handle;
+	SSL_CTX *ssl_context;
+
 } hammer_connection_t;
 
 int hammer_conn_job_add(hammer_connection_t *conn, int length);

@@ -79,7 +79,6 @@ void *hammer_epoll_start(int efd, hammer_epoll_handlers_t *handler, int max_even
 }
 
 /* created thread, all this calls are in the thread context */
-//FIXME: static function ? why ?
 void *hammer_cpu_worker_loop(void *thread_sched)
 {
 	hammer_sched_t *sched = thread_sched;

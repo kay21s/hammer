@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <string.h>
 #include <stdio.h>
 #include <pthread.h>
 
@@ -10,35 +11,46 @@
 #include "hammer_dispatcher.h"
 #include "hammer_cpu_worker.h"
 
-hammer_config_t *hammer_get_config()
+int hammer_config_init()
 {
-	hammer_config_t *config;
+	int length;
 
 	config = hammer_mem_calloc(sizeof(hammer_config_t));
+
 	config->cpu_worker_num = 1;
 	config->gpu_worker_num = 0;
 	config->workers = 1; // cpu_worker_num + gpu_worker_num
 	config->epoll_max_events = 128;
 
-	config->server_ip = "219.219.216.11";
+	length = strlen("219.219.216.11");
+	config->server_ip = malloc(length);
+	memcpy(config->server_ip, "219.219.216.11", length);
 	config->server_port = 80;
 
-	config->listen_ip = "0.0.0.0";
+	length = strlen("127.0.0.1");
+	config->listen_ip = malloc(length);
+	memcpy(config->listen_ip, "127.0.0.1", length);
 	config->listen_port = 80;
 
 	config->conn_buffer_size = 4096;
-	/*
-	config = {
-		1,
-		0,
-		1,
-		128,
-		"219.219.216.11",
-		80,
-		4096,
-	};*/
 
-	return config;
+	/*
+
+	config = {
+		1, // cpu_worker_num
+		0, // gpu_worker_num
+		1, // total worker
+		128, // epoll_max_events
+
+		"219.219.216.11", // server_ip
+		80, // server_port
+		"127.0.0.1", // listen_ip
+		80, // listen_port
+
+		4096, // conn_buffer_size
+	};
+	*/
+	return 0;
 }
 
 
@@ -130,11 +142,12 @@ int hammer_dispatcher_launch_cpu_workers()
 
 int main()
 {
+	hammer_config_init();
+
 	hammer_sched_init();
 	//hammer_connection_init();
 	hammer_thread_keys_init();
 	
-	config = hammer_get_config();
 
 	/* Launch workers first*/
 	hammer_dispatcher_launch_cpu_workers();
