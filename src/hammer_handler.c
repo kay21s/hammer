@@ -20,6 +20,7 @@ int hammer_handler_connect(hammer_connection_t *conn)
 	struct sockaddr_in address;
 	int ret, socket;
 	hammer_sched_t *sched = hammer_sched_get_sched_struct();
+	hammer_connection_t *c;
 
 	socket = hammer_socket_create();
 
@@ -33,11 +34,12 @@ int hammer_handler_connect(hammer_connection_t *conn)
 		return -1;
 	}
 
+	/* Get a connection and associate with the epoll event */
+	c = hammer_get_connection();
+	hammer_init_connection(c);
+
 	/* Assign socket to worker thread */
-	ret = hammer_sched_add_connection(socket, sched, conn);
-	if (ret == -1) {
-		hammer_socket_close(socket);
-	}
+	hammer_sched_add_connection(c, sched, conn);
 
 	return 0;
 }
@@ -71,9 +73,10 @@ int hammer_handler_listen()
 	return socket;
 }
 
-int hammer_handler_accept(int server_socket)
+hammer_connection_t *hammer_handler_accept(int server_socket)
 {
-	int remote_socket;
+	int remote_socket, ret;
+	hammer_connection_t *c;
 
 	remote_socket = hammer_socket_accept(server_socket);
 	if (remote_socket < 0) {
@@ -84,29 +87,39 @@ int hammer_handler_accept(int server_socket)
 	/* Set this socket non-blocking */
 	hammer_socket_set_nonblocking(remote_socket);
 
-	return remote_socket;
+	/* Get a connection and associate with the epoll event */
+	c = hammer_get_connection();
+	hammer_init_connection(c);
+
+	if (config->ssl) {
+		/* SSL initialization and accept */
+		hammer_openssl_init(c);
+		ret = hammer_openssl_accept(c);
+	}
+
+	return c;
 }
 
 // we delete both the two connections
-int hammer_handler_error(hammer_connection_t *conn)
+int hammer_handler_error(hammer_connection_t *c)
 {
-	hammer_sched_del_connection(conn);
+	hammer_sched_del_connection(c);
 
 	return 0;
 }
 
 // we delete both the two connections
-int hammer_handler_close(hammer_connection_t *conn)
+int hammer_handler_close(hammer_connection_t *c)
 {
-	hammer_sched_del_connection(conn);
+	hammer_sched_del_connection(c);
 
 	return 0;
 }
 
-int hammer_handler_read(hammer_connection_t *conn)
+int hammer_handler_read(hammer_connection_t *c)
 {
 	int recv, available;
-	hammer_connection_t *r_conn;
+	hammer_connection_t *rc;
 	hammer_sched_t *sched = hammer_sched_get_sched_struct();
 
 //			hammer_epoll_state_set(sched->epoll_fd, socket,
@@ -114,17 +127,24 @@ int hammer_handler_read(hammer_connection_t *conn)
 //					HAMMER_EPOLL_LEVEL_TRIGGERED,
 //					(EPOLLERR | EPOLLHUP | EPOLLRDHUP | EPOLLIN));
 
-	available = conn->body_size - conn->body_length;
+	available = c->body_size - c->body_length;
 	if (available <= 0) {
 		printf("small available buffer!\n");
 		exit(0);
 	}
 
 	/* Read incomming data */
-	recv = hammer_socket_read(
-			conn->socket,
-			conn->body_ptr + conn->body_length,
-			available);
+	if (c->ssl) {
+		recv = hammer_openssl_read(
+				c->socket,
+				c->body_ptr + c->body_length,
+				available);
+	} else {
+		recv = hammer_socket_read(
+				c->socket,
+				c->body_ptr + c->body_length,
+				available);
+	}
 
 	if (recv <= 0) {
 		// FIXME
@@ -137,49 +157,62 @@ int hammer_handler_read(hammer_connection_t *conn)
 		//}
 
 	} else if (recv > 0) {
-		hammer_conn_job_add(conn, recv);
+		hammer_conn_job_add(c, recv);
 		
-		if (conn->body_length + 1 >= conn->body_size) {
+		if (c->body_length + 1 >= c->body_size) {
 			//hammer_session_remove(socket);
 			printf("buffer full\n");
 			return -1;
 		}
 
 		// activate the other socket to be write to
-		if (conn->r_conn == NULL) {
+		if (c->r_conn == NULL) {
 			// the connection has not been established, now we connect it
-			hammer_handler_connect(conn);
+			hammer_handler_connect(c);
 		}
-		r_conn = conn->r_conn;
+		rc= c->r_conn;
 
-		hammer_epoll_change_mode(sched->epoll_fd,
-			r_conn->socket,
-			HAMMER_EPOLL_WRITE, HAMMER_EPOLL_LEVEL_TRIGGERED);
+		/* if we read packets from clients, we will forward it to server directly
+		   which needs no batch operations. When GPU batch is needed, we will not  
+		   forward packets received from server to client directly */
+		if (!(c->ssl == 0 && config->gpu == 1)) {
+			hammer_epoll_change_mode(sched->epoll_fd,
+					rc->socket,
+					HAMMER_EPOLL_WRITE,
+					HAMMER_EPOLL_LEVEL_TRIGGERED);
+		}
 	}
 
 	return recv;
 }
 
 
-int hammer_handler_write(hammer_connection_t *conn)
+int hammer_handler_write(hammer_connection_t *c)
 {
 	int send;
-	hammer_connection_t *r_conn;
-
-	// this is the socket to write to, now we get the socket that has read something
-	r_conn = conn->r_conn;
+	hammer_connection_t *rc;
 
 	hammer_job_t *this_job;
 	struct hammer_list *job_list, *job_head;
 
-	job_list = r_conn->job_list;
+	// this is the socket to write to, now we get the socket that has read something
+	rc = c->r_conn;
+
+	job_list = rc->job_list;
 	hammer_list_foreach(job_head, job_list) {
 		this_job = hammer_list_entry(job_head, hammer_job_t, _head);
 
-		send = hammer_socket_write(
-			conn->socket, 
-			this_job->job_body_ptr, 
-			this_job->job_body_length);
+		if (c->ssl) {
+			send = hammer_openssl_write(
+					c, 
+					this_job->job_body_ptr, 
+					this_job->job_body_length);
+		} else {
+			send = hammer_socket_write(
+					c->socket, 
+					this_job->job_body_ptr, 
+					this_job->job_body_length);
+		}
 
 		if (send != this_job->job_body_length) {
 			printf("Not all are send \n");

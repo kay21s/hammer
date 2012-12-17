@@ -15,8 +15,10 @@
 #include "hammer_epoll.h"
 #include "hammer_config.h"
 #include "hammer_macros.h"
+#include "hammer_batch.h"
 
-pthread_key_t worker_sched_node;
+pthread_key_t worker_sched_struct;
+pthread_key_t worker_batch;
 
 void *hammer_epoll_start(int efd, hammer_epoll_handlers_t *handler, int max_events)
 {
@@ -26,7 +28,7 @@ void *hammer_epoll_start(int efd, hammer_epoll_handlers_t *handler, int max_even
 
 	struct epoll_event *events;
 	hammer_sched_t *sched;
-	hammer_connection_t *conn;
+	hammer_connection_t *c;
 
 	/* Get sched node */
 	sched = hammer_sched_get_sched_struct();
@@ -40,30 +42,40 @@ void *hammer_epoll_start(int efd, hammer_epoll_handlers_t *handler, int max_even
 	pthread_mutex_unlock(&mutex_worker_init);
 
 	while (1) {
-		ret = -1;
+
+		/* Each time, we first check if GPU has gave any indication for 
+		   1) which buffer is taken,
+		   2) which buffer has been processed */
+		if (hammer_batch_if_gpu_processed_new(batch)) {
+			hammer_batch_forwarding(batch);
+		}
+
 		//FIXME: maybe problems in pointer &events
 		num_events = hammer_epoll_wait(efd, &events, max_events);
 
 		for (i = 0; i < num_events; i++) {
-			conn = (hammer_connection_t *)events[i].data.ptr;
+			c = (hammer_connection_t *) events[i].data.ptr;
 			fd = events[i].data.fd;
 
 			if (events[i].events & EPOLLIN) {
 				HAMMER_TRACE("[FD %i] EPoll Event READ", fd);
-				ret = (*handler->read) (conn);
+				ret = (*handler->read) (c);
 			}
 			else if (events[i].events & EPOLLOUT) {
 				HAMMER_TRACE("[FD %i] EPoll Event WRITE", fd);
-				ret = (*handler->write) (conn);
+				ret = (*handler->write) (c);
 			}
 			else if (events[i].events & (EPOLLHUP | EPOLLERR | EPOLLRDHUP)) {
 				HAMMER_TRACE("[FD %i] EPoll Event EPOLLHUP/EPOLLER", fd);
-				ret = (*handler->error) (conn);
+				ret = (*handler->error) (c);
+			} else {
+				hammer_err("What's up man, error here\n");
+				exit(0);
 			}
 
 			if (ret < 0) {
 				HAMMER_TRACE("[FD %i] Epoll Event FORCE CLOSE | ret = %i", fd, ret);
-				(*handler->close) (conn);
+				(*handler->close) (c);
 			}
 		}
 
@@ -92,9 +104,13 @@ void *hammer_cpu_worker_loop(void *thread_sched)
 
 	/* Export known scheduler node to context thread */
 	pthread_setspecific(worker_sched_struct, (void *) sched);
-
 	__builtin_prefetch(sched);
 	__builtin_prefetch(&worker_sched_struct);
+
+	// FIXME
+	pthread_setspecific(worker_batch, (void *) batch);
+	__builtin_prefetch(batch);
+	__builtin_prefetch(&worker_batch);
 
 	/* Init epoll_wait() loop */
 	hammer_epoll_start(sched->epoll_fd, handler, sched->epoll_max_events);

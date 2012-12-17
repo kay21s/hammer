@@ -16,6 +16,15 @@ typedef struct hammer_config_s {
 	unsigned int listen_port;
 
 	int conn_buffer_size;
+
+	int ssl;
+	int batch_buf_max_size;
+	int batch_job_max_num;
+	int key_size;
+	int iv_size;
+
+	// Most important argument for realtime scheduling algorithm
+	int time_interval; // 40ms, 30ms ...
 } hammer_config_t;
 
 hammer_config_t *config;

@@ -15,6 +15,7 @@ int hammer_dispatcher_loop(int server_fd)
 {
 	int ret, remote_fd, worker_id = 0;
 	hammer_sched_t *sched;
+	hammer_connection_t *c;
 
 	/* Activate TCP_DEFER_ACCEPT */
 	if (hammer_socket_set_tcp_defer_accept(server_fd) != 0) {
@@ -23,26 +24,22 @@ int hammer_dispatcher_loop(int server_fd)
 
 	/* Accept new connections */
 	while (1) {
-		remote_fd = hammer_handler_accept(server_fd);
-		if (hammer_unlikely(remote_fd == -1)) {
-			return -1;
-		}
+		/* accept first */
+		c = hammer_handler_accept(server_fd);
 
 		/* Next worker target */
 		worker_id = hammer_sched_next_worker_id();
 		if (hammer_unlikely(worker_id == -1)) {
-			return -1;
+			hammer_err("no worker available\n");
+			exit(0);
 		}
-
 		sched = &(sched_list[worker_id]);
 
-		/* Assign socket to worker thread */
-		ret = hammer_sched_add_connection(remote_fd, sched, NULL);
-		if (ret == -1) {
-			hammer_socket_close(remote_fd);
-			return ret;
-		}
+		/* Assign connection to worker thread */
+		hammer_sched_add_connection(c, sched, NULL);
 	}
+
+	return 0;
 }
 
 int hammer_dispatcher()

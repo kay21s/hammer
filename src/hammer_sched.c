@@ -42,7 +42,6 @@ int hammer_sched_want_no_conn(hammer_sched_t *sched)
 	return 0;
 }
 
-
 // simple dispatching algorithm
 int hammer_sched_next_worker_id()
 {
@@ -82,25 +81,17 @@ int hammer_sched_next_worker_id()
 	return id;
 }
 
-
-inline int hammer_sched_add_connection(int remote_fd, hammer_sched_t *sched, hammer_connection_t *r_conn)
+void hammer_sched_add_connection(hammer_connection_t *c, hammer_sched_t *sched, hammer_connection_t *rc)
 {
 	int ret;
-	hammer_connection_t *new_conn;
-
-	/* Get a connection and associate with the epoll event */
-	new_conn = hammer_get_connection();
-	hammer_init_connection(new_conn);
 
 	ret = hammer_epoll_add(sched->epoll_fd, remote_fd, HAMMER_EPOLL_READ,
-			HAMMER_EPOLL_LEVEL_TRIGGERED, (void *)new_conn);
-
-	/* If epoll has failed, decrement the active connections counter */
+			HAMMER_EPOLL_LEVEL_TRIGGERED, (void *)c);
 	if (hammer_likely(ret == 0)) {
 		if (r_conn != NULL) {
 			/* r_conn != NULL, this connection is added by connect(), to server */
-			new_conn->r_conn = r_conn;
-			r_conn->r_conn = new_conn;
+			c->r_conn = rc;
+			rc->r_conn = c;
 
 			sched->connected_connections ++;
 		} else {
@@ -108,28 +99,30 @@ inline int hammer_sched_add_connection(int remote_fd, hammer_sched_t *sched, ham
 			sched->accepted_connections ++;
 		}
 	} else {
-		/* fails, free the connection */
-		hammer_free_connection(new_conn);
+		/* fails, close the connection */
+		hammer_close_connection(c);
+		hammer_err("epoll add fails\n");
+		exit(0);
 	}
 
-	return ret;
+	return;
 }
 
 // we delete both the two connections
-inline int hammer_sched_del_connection(hammer_connection_t *conn)
+int hammer_sched_del_connection(hammer_connection_t *c)
 {
-	hammer_connection_t *r_conn = conn->r_conn;
+	hammer_connection_t *rc= c->r_conn;
 	hammer_sched_t *sched = hammer_sched_get_sched_struct();
 
 	/* remove this connection */
-	hammer_epoll_del(sched->epoll_fd, conn->socket);
-	hammer_close_connection(conn);
+	hammer_epoll_del(sched->epoll_fd, c->socket);
+	hammer_close_connection(c);
 	sched->closed_connections ++;
 
 	/* remove its corresponding connection */
-	if (r_conn != NULL) {
-		hammer_epoll_del(sched->epoll_fd, r_conn->socket);
-		hammer_close_connection(r_conn);
+	if (rc != NULL) {
+		hammer_epoll_del(sched->epoll_fd, rc->socket);
+		hammer_close_connection(rc);
 		sched->closed_connections ++;
 	}
 

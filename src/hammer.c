@@ -34,6 +34,21 @@ int hammer_config_init()
 
 	config->conn_buffer_size = 4096;
 
+	config->ssl = 0; // if this is a ssl proxy
+	config->gpu = 0; // if this need batch processing by GPU
+
+	config->time_interval = 40; // ms
+	/* we take 40ms as parameter, for 10Gbps bandwidth,
+	   40ms * 10Gbps = 400 * 10^3 bits ~= (<) 50 KB = 40 * 1.25 * 10^3.
+	   Take 64 bytes minimum packet size, at most 782 jobs each batch,
+	   we allocate 1000 jobs at most.
+	   */
+	config->batch_buf_max_size = config->time_interval * 1.25 * 1000; // byte
+	config->batch_job_max_num = 1000;
+
+	config->key_size = 128/8; // byte
+	config->iv_size = 128/8; // byte
+
 	/*
 
 	config = {
@@ -69,6 +84,7 @@ int hammer_sched_init()
 void hammer_thread_keys_init()
 {
 	pthread_key_create(&worker_sched_struct, NULL);
+	pthread_key_create(&worker_buf, NULL);
 }
 #if 0
 int hammer_dispatcher_launch_gpu_workers()

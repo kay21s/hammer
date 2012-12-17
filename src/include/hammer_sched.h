@@ -37,7 +37,7 @@ int hammer_sched_want_new_conn(hammer_sched_t *sched);
 int hammer_sched_want_no_conn(hammer_sched_t *sched);
 inline hammer_sched_t *hammer_sched_get_sched_struct();
 int hammer_sched_next_worker_id();
-inline int hammer_sched_add_connection(int remote_fd, hammer_sched_t *sched, hammer_connection_t *r_conn);
-inline int hammer_sched_del_connection(hammer_connection_t *conn);
+int hammer_sched_add_connection(hammer_connection_t *c, hammer_sched_t *sched, hammer_connection_t *rc);
+int hammer_sched_del_connection(hammer_connection_t *c);
 
 #endif
