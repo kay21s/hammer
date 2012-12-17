@@ -86,43 +86,8 @@ void hammer_thread_keys_init()
 	pthread_key_create(&worker_sched_struct, NULL);
 	pthread_key_create(&worker_buf, NULL);
 }
-#if 0
-int hammer_dispatcher_launch_gpu_workers()
-{
-	int efd;
-	pthread_t tid;
-	pthread_attr_t attr;
-	int i, thread_id;
 
-	hammer_sched_t *sched;
-
-	for (i = 0; i < config->gpu_worker_num; i++) {
-		/* Creating epoll file descriptor */
-		efd = hammer_epoll_create(config->max_epoll_events);
-		if (efd < 1) {
-			return -1;
-		}
-
-		thread_id = config->cpu_worker_num + i;
-
-		sched = &(sched_list[thread_id]);
-		hammer_init_sched(sched, efd, thread_id);
-
-		pthread_attr_init(&attr);
-		pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-		if (pthread_create(&tid, &attr, hammer_gpu_worker_loop,
-					(void *) sched) != 0) {
-			perror("pthread_create");
-			return -1;
-		}
-
-	}
-
-	return 0;
-}
-#endif
-
-int hammer_dispatcher_launch_cpu_workers()
+int hammer_launch_cpu_workers()
 {
 	int efd;
 	pthread_t tid;
@@ -155,6 +120,20 @@ int hammer_dispatcher_launch_cpu_workers()
 	return 0;
 }
 
+int hammer_launch_gpu_workers()
+{
+	pthread_t tid;
+	pthread_attr_t attr;
+
+	pthread_attr_init(&attr);
+	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+	if (pthread_create(&tid, &attr, hammer_gpu_worker_loop, NULL) != 0) {
+		printf("pthread_create error!!\n");
+		return -1;
+	}
+
+	return 0;
+}
 
 int main()
 {
@@ -166,8 +145,9 @@ int main()
 	
 
 	/* Launch workers first*/
-	hammer_dispatcher_launch_cpu_workers();
-//	hammer_dispatcher_launch_gpu_workers();
+	hammer_launch_cpu_workers();
+	hammer_launch_gpu_workers();
+
 	/* the main function becomes the dispatcher and enters the dispatcher loop*/
 	hammer_dispatcher();
 

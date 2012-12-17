@@ -6,4 +6,41 @@ Composition: 1 dispatcher + 1 GPU worker thread + several CPU worker threads
 
 dispatcher : dispatching connections to CPU workers
 CPU worker : batch the data, AES decryption, RSA, forwarding, I/O related operation
-GPU worker : HMAC + AES encryption only, execute 
+GPU worker : HMAC + AES encryption only, process with GPU 
+
+
+
++------------------------------------------+
+|                                          |
+|                                          |
+|                                          |
+|                                          |
+|                                          |
+|                  GPU                     |
+|                                          |
+|                                          |
+|                                          |
+|                                          |
+|                                          |
+|------------------------------------------+
+|                    |
+|                    |
+|        CPU         |
+|                    |
++--------------------+
+|                    |
+|                    |
+|        CPU         |
+|                    |
++--------------------+
+|                    |
+|                    |
+|        CPU         |
+|                    |
++--------------------+
+|                    |
+|                    |
+|                    |
+|      ... ...       |
+
+It is like a hammer ... =)
