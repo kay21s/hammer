@@ -14,6 +14,7 @@
 typedef struct hammer_job_s
 {
 	int job_body_length;
+	int job_pad_length;
 	char *job_body_ptr;
 
 	/* which connection this job belongs */
@@ -27,20 +28,20 @@ typedef struct hammer_connection_s
 	int socket;
 	int ssl; // if ssl is enabled
 
-	int body_length; // current length
-	int body_size; // total size
-	char *body_ptr;
+	// not use any more
+	// int body_length; // current length
+	// int body_size; // total size
+	// char *body_ptr;
 
 	struct hammer_connection_s *r_conn;
-
 	struct hammer_list *job_list;
 
 	// SSL structs
 	SSL *ssl_handle;
 	SSL_CTX *ssl_context;
 
-	char *key;
-	char *iv;
+	char key[AES_KEY_SIZE];
+	char iv[AES_IV_SIZE];
 
 } hammer_connection_t;
 

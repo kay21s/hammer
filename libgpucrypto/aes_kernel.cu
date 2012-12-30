@@ -1,5 +1,5 @@
 #include "aes_core.h"
-#include "aes_kernel.h"
+#include "crypto_kernel.h"
 
 /*******************************************************************
   AES CBC kernel

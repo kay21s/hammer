@@ -20,7 +20,8 @@ typedef struct crypto_context_s {
  * @param dev_ctx Device context pointer.
  * Device context must be initialized before calling this function.
  */
-void crypto_context_init_streams();
+void crypto_context_init(crypto_context_t *cry_ctx, device_context_t *dev_ctx);
+
 /**
  * It executes AES-CBC encryption in GPU.
  *

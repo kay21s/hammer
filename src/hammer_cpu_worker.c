@@ -59,11 +59,19 @@ void *hammer_epoll_start(int efd, hammer_epoll_handlers_t *handler, int max_even
 
 			if (events[i].events & EPOLLIN) {
 				HAMMER_TRACE("[FD %i] EPoll Event READ", fd);
-				ret = (*handler->read) (c);
+				if (c->ssl) {
+					ret = (*handler->ssl_read) (c);
+				} else {
+					ret = (*handler->read) (c);
+				}
 			}
 			else if (events[i].events & EPOLLOUT) {
 				HAMMER_TRACE("[FD %i] EPoll Event WRITE", fd);
-				ret = (*handler->write) (c);
+				if (c->ssl) {
+					ret = (*handler->ssl_write) (c);
+				} else {
+					ret = (*handler->write) (c);
+				}
 			}
 			else if (events[i].events & (EPOLLHUP | EPOLLERR | EPOLLRDHUP)) {
 				HAMMER_TRACE("[FD %i] EPoll Event EPOLLHUP/EPOLLER", fd);
@@ -96,8 +104,10 @@ void *hammer_cpu_worker_loop(void *thread_sched)
 	hammer_sched_t *sched = thread_sched;
 	hammer_epoll_handlers_t *handler;
 
-	handler = hammer_epoll_set_handlers((void *) hammer_handler_read,
-			(void *) hammer_handler_write,
+	handler = hammer_epoll_set_handlers((void *) hammer_handler_batch_read,
+			(void *) hammer_handler_ssl_read,
+			(void *) hammer_handler_write, 
+			(void *) hammer_handler_ssl_write,
 			(void *) hammer_handler_error,
 			(void *) hammer_handler_close,
 			(void *) hammer_handler_close);

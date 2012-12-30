@@ -17,7 +17,9 @@
 
 
 hammer_epoll_handlers_t *hammer_epoll_set_handlers(void (*read) (hammer_connection_t *),
+                                         void (*ssl_read) (hammer_connection_t *),
                                          void (*write) (hammer_connection_t *),
+                                         void (*ssl_write) (hammer_connection_t *),
                                          void (*error) (hammer_connection_t *),
                                          void (*close) (hammer_connection_t *),
                                          void (*timeout) (hammer_connection_t *))
@@ -26,7 +28,9 @@ hammer_epoll_handlers_t *hammer_epoll_set_handlers(void (*read) (hammer_connecti
 
 	handler = hammer_mem_malloc(sizeof(hammer_epoll_handlers_t));
 	handler->read = (void *) read;
+	handler->ssl_read = (void *) ssl_read;
 	handler->write = (void *) write;
+	handler->ssl_write = (void *) ssl_write;
 	handler->error = (void *) error;
 	handler->close = (void *) close;
 	handler->timeout = (void *) timeout;

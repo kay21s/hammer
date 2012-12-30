@@ -2,18 +2,94 @@
 #include <cutil_inline.h>
 
 #include "crypto_context.h"
-#include "aes_kernel.h"
-#include "sha1_kernel.h"
+#include "crypto_kernel.h"
 
 #define AES_BLOCK_SIZE 16
 #define THREADS_PER_BLK 256 // in order to load t box into shared memory on parallel
 
-void crypto_context_init(cyrpto_context_t *crypto_ctx)
+void crypto_context_init(cyrpto_context_t *crypto_ctx, device_context_t *dev_ctx)
 {
+	ctx->dev_ctx = dev_ctx;
+	
 	for (unsigned i = 0; i <= MAX_STREAM; i++) {
 		crypto_ctx->streams[i].out = 0;
 		crypto_ctx->streams[i].out_d = 0;
 		crypto_ctx->streams[i].out_len = 0;
+	}
+}
+
+void crypto_context_sha1_aes_together(crypto_context_t *cry_ctx,
+			const void	     *memory_start,
+			const void	     *memory_d,
+			const unsigned long  in_pos,
+			const unsigned long  aes_keys_pos,
+			const unsigned long  ivs_pos,
+			const unsigned long  pkt_offset_pos,
+			const unsigned long  tot_in_len,
+			unsigned char        *out,
+			const unsigned long  num_flows,
+			const unsigned long  tot_out_len,
+			const unsigned int   stream_id,
+			const unsigned int   bits)
+{
+	assert(bits == 128);
+	assert(cry_ctx->dev_ctx->get_state(stream_id) == READY);
+	cry_ctx->dev_ctx->set_state(stream_id, WAIT_KERNEL);
+
+	/* Allocate memory on device */
+	uint8_t *in_d;
+	uint8_t *aes_keys_d;
+	uint8_t *ivs_d;
+	uint32_t *pkt_offset_d;
+	void *memory_d;
+
+	/* Calculate # of cuda blks required */
+	unsigned int  threads_per_blk = THREADS_PER_BLK;
+	int           num_blks        = (num_flows + threads_per_blk - 1) / threads_per_blk;
+
+	cudaMemcpyAsync(memory_d, memory_start, tot_in_len,
+			cudaMemcpyHostToDevice, cry_ctx->dev_ctx->get_stream(stream_id));
+
+	cry_ctx->dev_ctx->clear_checkbits(stream_id, num_blks);
+
+	in_d         = (uint8_t *) memory_d + in_pos;
+	aes_keys_d       = (uint8_t *) memory_d + aes_keys_pos;
+	ivs_d        = (uint8_t *) memory_d + ivs_pos;
+	pkt_offset_d = (uint32_t *) ((uint8_t *)memory_d + pkt_offset_pos);
+
+	/* Call cbc kernel function to do encryption */
+	if (cry_ctx->dev_ctx->use_stream()) {
+		HMAC_AES_together_gpu(in_d,
+					cry_ctx->streams[stream_id].out_d,
+					pkt_offset_d,
+					keys_d,
+					ivs_d,
+					num_flows,
+					cry_ctx->dev_ctx->get_dev_checkbits(stream_id),
+					threads_per_blk,
+					cry_ctx->dev_ctx->get_stream(stream_id));
+	} else {
+		HMAC_AES_together_gpu(in_d,
+					cry_ctx->streams[stream_id].out_d,
+					pkt_offset_d,
+					keys_d,
+					ivs_d,
+					num_flows,
+					cry_ctx->dev_ctx->get_dev_checkbits(stream_id),
+					threads_per_blk,
+					0);
+
+	}
+
+	assert(cudaGetLastError() == cudaSuccess);
+
+	// FIXME: what's going on here
+	cry_ctx->streams[stream_id].out     = out;
+	cry_ctx->streams[stream_id].out_len = tot_out_len;
+
+	/* Copy data back from device to host */
+	if (!cry_ctx->dev_ctx->use_stream()) {
+		sync(stream_id);
 	}
 }
 
@@ -102,15 +178,15 @@ void crypto_context_hmac_sha1(crypto_context_t *cry_ctx,
 			    const unsigned long  num_flows,
 			    const unsigned int   stream_id)
 {
-	assert(dev_ctx_->get_state(stream_id) == READY);
-	dev_ctx_->set_state(stream_id, WAIT_KERNEL);
+	assert(cry_ctx->dev_ctx->get_state(stream_id) == READY);
+	cry_ctx->dev_ctx->set_state(stream_id, WAIT_KERNEL);
 
 	//copy input data
 	cudaMemcpyAsync(memory_d,
 			memory_start,
 			data_size,
 			cudaMemcpyHostToDevice,
-			dev_ctx_->get_stream(stream_id));
+			cry_ctx->dev_ctx->get_stream(stream_id));
 
 	//variables need for kernel launch
 	int threads_per_blk = SHA1_THREADS_PER_BLK;
@@ -126,26 +202,26 @@ void crypto_context_hmac_sha1(crypto_context_t *cry_ctx,
 	uint16_t *lengths_d    = (uint16_t *)((uint8_t *)memory_d + lengths_pos);
 
 	//clear checkbits before kernel execution
-	dev_ctx_->clear_checkbits(stream_id, num_blks);
+	cry_ctx->dev_ctx->clear_checkbits(stream_id, num_blks);
 
-	if (dev_ctx_->use_stream() && stream_id > 0) {	//with stream
+	if (cry_ctx->dev_ctx->use_stream() && stream_id > 0) {	//with stream
 		hmac_sha1_gpu(in_d,
 			      keys_d,
 			      pkt_offset_d,
 			      lengths_d,
 			      out_d,
 			      num_flows,
-			      dev_ctx_->get_dev_checkbits(stream_id),
+			      cry_ctx->dev_ctx->get_dev_checkbits(stream_id),
 			      threads_per_blk,
-			      dev_ctx_->get_stream(stream_id));
-	} else  if (!dev_ctx_->use_stream() && stream_id == 0) {//w/o stream
+			      cry_ctx->dev_ctx->get_stream(stream_id));
+	} else  if (!cry_ctx->dev_ctx->use_stream() && stream_id == 0) {//w/o stream
 		hmac_sha1_gpu(in_d,
 			      keys_d,
 			      pkt_offset_d,
 			      lengths_d,
 			      out_d,
 			      num_flows,
-			      dev_ctx_->get_dev_checkbits(stream_id),
+			      cry_ctx->dev_ctx->get_dev_checkbits(stream_id),
 			      SHA1_THREADS_PER_BLK,
 			      0);
 	} else {
@@ -159,7 +235,7 @@ void crypto_context_hmac_sha1(crypto_context_t *cry_ctx,
 	streams[stream_id].out_len = 20 * num_flows;
 
 	//if stream is not used then sync (assuming blocking mode)
-	if (dev_ctx_->use_stream() && stream_id == 0) {
+	if (cry_ctx->dev_ctx->use_stream() && stream_id == 0) {
 		sync(stream_id);
 	}
 }

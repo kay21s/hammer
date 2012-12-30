@@ -46,6 +46,14 @@ int hammer_openssl_read(hammer_connection_t *c, char *buffer, int read_size)
 	return len;
 }
 
+int hammer_openssl_read_unencrypted(hammer_connection_t *c, char *buffer, int read_size)
+{
+	int len;
+
+	len = SSL_read_unencrypted(c->ssl_handle, buffer, read_size);
+	return len;
+}
+
 int hammer_openssl_write(hammer_connection_t *c, char *buffer, int write_size)
 {
 	int len;

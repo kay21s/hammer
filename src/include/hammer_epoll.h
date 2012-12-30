@@ -25,7 +25,9 @@
 typedef struct hammer_epoll_handlers_s
 {
 	int (*read) (hammer_connection_t *);
+	int (*ssl_read) (hammer_connection_t *);
 	int (*write) (hammer_connection_t *);
+	int (*ssl_write) (hammer_connection_t *);
 	int (*error) (hammer_connection_t *);
 	int (*close) (hammer_connection_t *);
 	int (*timeout) (hammer_connection_t *);
@@ -36,7 +38,9 @@ int hammer_epoll_create(int max_events);
 void *hammer_epoll_init(int efd, hammer_epoll_handlers_t *handler, int max_events);
 
 hammer_epoll_handlers_t *hammer_epoll_set_handlers(void (*read) (hammer_connection_t *),
+						void (*ssl_read) (hammer_connection_t *),
 						void (*write) (hammer_connection_t *),
+						void (*ssl_write) (hammer_connection_t *),
 						void (*error) (hammer_connection_t *),
 						void (*close) (hammer_connection_t *),
 						void (*timeout) (hammer_connection_t *));

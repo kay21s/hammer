@@ -1,4 +1,4 @@
-#include "sha1.h"
+#include "crypto_kernel.h"
 
 #include <stdint.h>
 #include <assert.h>

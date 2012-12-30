@@ -90,6 +90,8 @@ hammer_connection_t *hammer_handler_accept(int server_socket)
 	/* Get a connection and associate with the epoll event */
 	c = hammer_get_connection();
 	hammer_init_connection(c);
+	/* Accepted connection must be a SSL connection from client */
+	c->ssl = 1;
 
 	if (config->ssl) {
 		/* SSL initialization and accept */
@@ -134,18 +136,15 @@ int hammer_handler_read(hammer_connection_t *c)
 	}
 
 	/* Read incomming data */
-	if (c->ssl) {
-		recv = hammer_openssl_read(
-				c->socket,
-				c->body_ptr + c->body_length,
-				available);
-	} else {
-		recv = hammer_socket_read(
-				c->socket,
-				c->body_ptr + c->body_length,
-				available);
+	if (!(c->ssl)) {
+		hammer_err("What's up, this should be a ssl connection\n");
+		exit(0)
 	}
 
+	recv = hammer_socket_read(
+			c->socket,
+			c->body_ptr + c->body_length,
+			available);
 	if (recv <= 0) {
 		// FIXME
 		//if (errno == EAGAIN) {
@@ -175,7 +174,7 @@ int hammer_handler_read(hammer_connection_t *c)
 		/* if we read packets from clients, we will forward it to server directly
 		   which needs no batch operations. When GPU batch is needed, we will not  
 		   forward packets received from server to client directly */
-		if (!(c->ssl == 0 && config->gpu == 1)) {
+		if (config->gpu == 0) {
 			hammer_epoll_change_mode(sched->epoll_fd,
 					rc->socket,
 					HAMMER_EPOLL_WRITE,
@@ -195,6 +194,10 @@ int hammer_handler_write(hammer_connection_t *c)
 	hammer_job_t *this_job;
 	struct hammer_list *job_list, *job_head;
 
+	if (c->ssl) {
+		hammer_err("What's up, this should not be a ssl connection\n");
+		exit(0);
+	}
 	// this is the socket to write to, now we get the socket that has read something
 	rc = c->r_conn;
 
@@ -202,17 +205,10 @@ int hammer_handler_write(hammer_connection_t *c)
 	hammer_list_foreach(job_head, job_list) {
 		this_job = hammer_list_entry(job_head, hammer_job_t, _head);
 
-		if (c->ssl) {
-			send = hammer_openssl_write(
-					c, 
-					this_job->job_body_ptr, 
-					this_job->job_body_length);
-		} else {
-			send = hammer_socket_write(
-					c->socket, 
-					this_job->job_body_ptr, 
-					this_job->job_body_length);
-		}
+		send = hammer_socket_write(
+				c->socket, 
+				this_job->job_body_ptr, 
+				this_job->job_body_length);
 
 		if (send != this_job->job_body_length) {
 			printf("Not all are send \n");
@@ -225,3 +221,104 @@ int hammer_handler_write(hammer_connection_t *c)
 	return 0;
 }
 
+int hammer_handler_ssl_read(hammer_connection_t *c)
+{
+	int recv, available;
+	hammer_connection_t *rc;
+	hammer_sched_t *sched = hammer_sched_get_sched_struct();
+
+//			hammer_epoll_state_set(sched->epoll_fd, socket,
+//					HAMMER_EPOLL_READ,
+//					HAMMER_EPOLL_LEVEL_TRIGGERED,
+//					(EPOLLERR | EPOLLHUP | EPOLLRDHUP | EPOLLIN));
+
+	available = c->body_size - c->body_length;
+	if (available <= 0) {
+		printf("small available buffer!\n");
+		exit(0);
+	}
+
+	/* Read incomming data */
+	if (!(c->ssl)) {
+		hammer_err("What's up, this should be a ssl connection\n");
+		exit(0);
+	}
+
+	recv = hammer_openssl_read(
+			c,
+			c->body_ptr + c->body_length,
+			available);
+	if (recv <= 0) {
+		// FIXME
+		//if (errno == EAGAIN) {
+		//	return 1;
+		//} else {
+			//hammer_session_remove(socket);
+			printf("Hey!!!\n");
+			return -1;
+		//}
+
+	} else if (recv > 0) {
+		hammer_conn_job_add(c, recv);
+		
+		if (c->body_length + 1 >= c->body_size) {
+			//hammer_session_remove(socket);
+			printf("buffer full\n");
+			return -1;
+		}
+
+		// activate the other socket to be write to
+		if (c->r_conn == NULL) {
+			// the connection has not been established, now we connect it
+			hammer_handler_connect(c);
+		}
+		rc= c->r_conn;
+
+		/* if we read packets from clients, we will forward it to server directly
+		   which needs no batch operations. When GPU batch is needed, we will not  
+		   forward packets received from server to client directly */
+		if (config->gpu == 0) {
+			hammer_epoll_change_mode(sched->epoll_fd,
+					rc->socket,
+					HAMMER_EPOLL_WRITE,
+					HAMMER_EPOLL_LEVEL_TRIGGERED);
+		}
+	}
+
+	return recv;
+}
+
+int hammer_handler_ssl_write(hammer_connection_t *c)
+{
+	int send;
+	hammer_connection_t *rc;
+
+	hammer_job_t *this_job;
+	struct hammer_list *job_list, *job_head;
+
+	if (!c->ssl) {
+		hammer_err("What's up, this should be a ssl connection\n");
+		exit(0);
+	}
+	// this is the socket to write to, now we get the socket that has read something
+	rc = c->r_conn;
+
+	job_list = rc->job_list;
+	hammer_list_foreach(job_head, job_list) {
+		this_job = hammer_list_entry(job_head, hammer_job_t, _head);
+
+		send = hammer_openssl_write(
+				c, 
+				this_job->job_body_ptr, 
+				this_job->job_body_length);
+
+		if (send != this_job->job_body_length) {
+			printf("Not all are send \n");
+			return -1;
+		}
+
+		hammer_conn_job_del(this_job);
+	}
+
+	return 0;
+}

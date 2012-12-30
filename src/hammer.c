@@ -11,6 +11,28 @@
 #include "hammer_dispatcher.h"
 #include "hammer_cpu_worker.h"
 
+/*
+  |                            |                              |
+  |   hammer_handler_ssl_read  |                              |
+  | ------------------------>  |                              |
+  |                            |    hammer_handler_write      |
+  |                            |  ------------------------>   |
+  |                            |                              |
+  |                            |                              |
+  |                            |                              |
+  |                            |    hammer_batch_handler_read |
+  |                            |  <------------------------   |
+  |                            |                              |
+  |   hammer_handler_ssl_write |                              |
+  | <------------------------  |                              |
+  |                            |                              |
+  |                            |                              |
+Client        (SSL)          Proxy         (Socket)         Server
+
+*/
+
+
+
 int hammer_config_init()
 {
 	int length;

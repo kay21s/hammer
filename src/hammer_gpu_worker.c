@@ -56,7 +56,7 @@ void *hammer_gpu_worker_loop(void *arg)
 	hammer_timer_reset(&loopcounter);
 	hammer_timer_start(&loopcounter);
 	
-	for (int i = 0; i < iterations; i ++) {
+	for (int i = 0; i < config->iterations; i ++) {
 
 		timeLog->loopMarker();
 
@@ -71,7 +71,7 @@ void *hammer_gpu_worker_loop(void *arg)
 		}
 
 
-		// Generate Stream Data
+		// Get Input Buffer from Client
 		this_buffer_size = hammer_gpu_get_streams(input, buffer_size, 
 			keys, ivs, pkt_offset, &this_stream_num);
 		
