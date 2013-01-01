@@ -42,8 +42,8 @@ void crypto_context_sha1_aes_encrypt(crypto_context_t *cry_ctx,
 			const unsigned long  ivs_pos,
 			const unsigned long  pkt_offset_pos,
 			const unsigned long  tot_in_len,
-			const unsigned long  num_flows,
 			const unsigned long  tot_out_len,
+			const unsigned long  num_flows,
 			const unsigned int   stream_id,
 			const unsigned int   bits)
 {
