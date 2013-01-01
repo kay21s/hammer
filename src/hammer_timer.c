@@ -19,6 +19,17 @@ int hammer_timer_start(hammer_timer_t *timer)
 	return 0;
 }
 
+int hammer_timer_restart(hammer_timer_t *timer)
+{
+	struct timespec s;
+	clock_gettime(CLOCK_REALTIME, &s);
+	timer->start = (uint64_t)s.tv_sec * 1e9 + (uint64_t)s.tv_nsec;
+
+	_clocks = 0;
+
+	return 0;
+}
+
 int hammer_timer_stop(hammer_timer_t *timer)
 {
 	uint64_t n;

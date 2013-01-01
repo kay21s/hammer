@@ -3,15 +3,15 @@
 
 #include "device_context.h"
 
-typedef struct cuda_stream_s {
-	uint8_t *out;
-	uint8_t *out_d;
+typedef struct gpu_stream_s {
+	uint8_t *input_d;
+	uint8_t *output_d;
 	unsigned long out_len;
-} cuda_stream_t;
+} gpu_stream_t;
 
 typedef struct crypto_context_s {
 	device_context_t *dev_ctx;
-	cuda_stream_t streams[MAX_STREAM + 1];
+	gpu_stream_t *streams;
 } crypto_context_t;
 
 /**

@@ -121,6 +121,9 @@ void *hammer_cpu_worker_loop(void *thread_sched)
 	pthread_setspecific(worker_batch, (void *) batch);
 	__builtin_prefetch(batch);
 	__builtin_prefetch(&worker_batch);
+	/* Allocate the batch buffers, each cpu worker has a set of buffers,
+	 * two as input buffer, and two as output buffer. */
+	hammer_batch_init();
 
 	/* Init epoll_wait() loop */
 	hammer_epoll_start(sched->epoll_fd, handler, sched->epoll_max_events);

@@ -5,15 +5,14 @@
 
 typedef struct hammer_batch_buf_s
 {
-	// keys, pkt_offsets, and ivs, are all stored in the input buffer
+	/* keys, pkt_offsets, and ivs, are all stored in the input buffer */
 	void *input_buf;
-
-	void *keys;
-	uint32_t *pkt_offsets;
-	void *ivs;
-	
-	// GPU output buffer
 	void *output_buf;
+
+	unsigned int aes_keys_pos;
+	unsigned int pkt_offsets_pos;
+	unsigned int ivs_pos;
+	
 
 	// Job for forwarding
 	hammer_job_t *job_list;
@@ -30,6 +29,7 @@ typedef struct hammer_batch_s
 	hammer_batch_buf_t buf_A; // id = 0
 	hammer_batch_buf_t buf_B; // id = 1
 
+	/* Current buffer CPU worker is using */
 	hammer_batch_buf_t *cur_buf;
 	int cur_buf_id;
 

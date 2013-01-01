@@ -31,7 +31,7 @@ void device_context_free(device_context_t *dc)
 	}
 }
 
-bool device_context_init(device_context_t *dc, const unsigned long size, const unsigned nstream)
+bool device_context_init(device_context_t *dc, const unsigned nstream)
 {
 	void *ret = NULL;
 	assert(nstream >= 0 && nstream <= MAX_STREAM);
