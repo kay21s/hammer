@@ -17,56 +17,46 @@
 #include "hammer_macros.h"
 #include "hammer_batch.h"
 
-hammer_batch_buf_t *hammer_gpu_get_batch_one(hammer_batch_t *batch, int *size)
-{
-	if (batch->buf_has_been_taken == -1) {
-
-		pthread_mutex_lock(&mutex_batch_launch);
-		batch->buf_has_been_taken = batch->cur_buf_index;
-		pthread_mutex_unlock(&mutex_batch_launch);
-
-		*size = batch->cur_buf->buf_length;
-
-		return batch->cur_buf;
-	} else {
-		hammer_err("error in hammer_gpu_take_buf\n");
-		exit(0);
-	}
-
-	return NULL;
-}
-
 /* Get the buffer of each CPU worker at each time interval I */
 void hammer_gpu_get_batch(hammer_gpu_worker_t *g, hammer_batch_buf_t *batch_set)
 {
-	int i;
+	int i, id;
 	hammer_batch_t *batch;
 
+	/* Get next Batch */
+	if (g->buf_set_id == 0) {
+		g->cur_buf_set = g->buf_set_B;
+		g->buf_set_id = 1;
+	} else if (g->buf_set_id == 1) {
+		g->cur_buf_set = g->buf_set_A;
+		g->buf_set_id = 0;
+	}
+
+	/* Tell the CPU worker we are taking the batch */
 	for (i = 0; i < config->cpu_worker_num; i ++) {
 		batch = &(batch_set[i]);
-		g->buf_set[i] = hammer_gpu_get_batch_one(batch, &(g->buf_size[i]));
-		g->total_bytes += g->buf_size[i];
+
+		if (batch->buf_has_been_taken == -1) {
+
+			pthread_mutex_lock(&(batch->mutex_batch_launch));
+			id = batch->buf_has_been_taken = batch->cur_buf_id;
+			pthread_mutex_unlock(&(batch->mutex_batch_launch));
+			
+			assert(id == g->buf_set_id);
+
+		} else {
+			hammer_err("error in hammer_gpu_take_buf\n");
+			exit(0);
+		}
+
+		/* For statistic */
+		g->total_bytes += g->cur_buf_set[i]->buf_length;
 	}
 
 	return ;
 }
 
 /* Tell the CPU worker that this batch has been completed */
-int hammer_gpu_give_result_one(hammer_batch_t *batch)
-{
-	if (batch->processed_buf_index == -1) {
-		/* just mark there is a buf been processed */
-		pthread_mutex_lock(&mutex_batch_complete);
-		batch->processed_buf_index = 1;
-		pthread_mutex_unlock(&mutex_batch_complete);
-	} else {
-		hammer_err("error in hammer_gpu_take_buf\n");
-		exit(0);
-	}
-
-	return 0;
-}
-
 void hammer_gpu_give_result(hammer_gpu_worker_t *g, hammer_batch_buf_t *batch_set)
 {
 	int i;
@@ -74,7 +64,16 @@ void hammer_gpu_give_result(hammer_gpu_worker_t *g, hammer_batch_buf_t *batch_se
 
 	for (i = 0; i < config->cpu_worker_num; i ++) {
 		batch = &(batch_set[i]);
-		hammer_gpu_give_result_one(batch);
+
+		if (batch->processed_buf_index == -1) {
+			/* just mark there is a buf been processed */
+			pthread_mutex_lock(&(batch->mutex_batch_complete));
+			batch->processed_buf_index = g->buf_set_id;
+			pthread_mutex_unlock(&(batch->mutex_batch_complete));
+		} else {
+			hammer_err("error in hammer_gpu_take_buf\n");
+			exit(0);
+		}
 	}
 
 	return ;
@@ -82,7 +81,20 @@ void hammer_gpu_give_result(hammer_gpu_worker_t *g, hammer_batch_buf_t *batch_se
 
 void hammer_gpu_worker_init(hammer_gpu_worker_t *g)
 {
-	g->buf_set = (hammer_batch_buf_t **)malloc(config->cpu_worker_num * sizeof(hammer_batch_buf_t *));
+	int i = 0;
+
+	g->buf_set_A = (hammer_batch_buf_t **)malloc(config->cpu_worker_num * sizeof(hammer_batch_buf_t *));
+	g->buf_set_B = (hammer_batch_buf_t **)malloc(config->cpu_worker_num * sizeof(hammer_batch_buf_t *));
+	/* Init GPU buf set pointers */
+	for (i = 0; i < config->cpu_worker_num; i ++) {
+		g->buf_set_A[i] = &(batch_set[i].buf_A);
+		g->buf_set_B[i] = &(batch_set[i].buf_B);
+	}
+
+	/* After waiting for I, we first take buffer set A (buf_id = 0), which has been filled with
+	 * jobs by CPU workers*/
+	 g->buf_set_id = 1; // we set 1 in initialization, so that it can get buf 0 first time
+
 	
 	/* Initialize variables in libgpucrypto */
 	/* There is a one-to-one mapping from CPU Worker's HAMMER_BATCH_T
@@ -95,14 +107,13 @@ void hammer_gpu_worker_init(hammer_gpu_worker_t *g)
 		config->batch_job_max_num * PKT_OFFSET_SIZE + // input buffer
 		config->batch_job_max_num * AES_IV_SIZE;
 	uint32_t output_size = config->batch_buf_max_size;
+
 	crypto_context_init(&(g->cry_ctx), input_size, output_size, config->cpu_worker_num);
 
+	/* Tell the dispatcher that GPU worker is ready too */
+	sched_list[gpu_worker_id].initialized = 1;
 
-	/* After waiting for I, we first take buffer set A (buf_id = 0), which has been filled with
-	 * jobs by CPU workers*/
-	 g->buf_set_id = 0;
-
-	 return;
+	return;
 }
 
 /* created thread, all this calls are in the thread context */
@@ -111,15 +122,28 @@ void *hammer_gpu_worker_loop(void *arg)
 	hammer_timer_t t, counter, loopcounter;
 	hammer_log_t log;
 
-	/* Initialize GPU worker */
-	hammer_gpu_worker_t g;
-	hammer_gpu_worker_init(&g);
-
 	/* Init timers */
 	hammer_timer_init(&t);
 	hammer_timer_init(&counter);
 	hammer_timer_init(&loopcounter);
 	hammer_log_init(&log);
+
+	/* Synchronization, Wait for CPU workers */
+	while (1) {
+		pthread_mutex_lock(&mutex_worker_init);
+		for (i = 0; i < config->cpu_worker_num; i++) {
+			if (sched_list[i].initialized)	ready++;
+		}
+		pthread_mutex_unlock(&mutex_worker_init);
+
+		if (ready == config->cpu_worker_num) break;
+		usleep(5000);
+	}
+
+	/* Initialize GPU worker, we wait for that all CPU workers have been initialized
+	 * then we can init GPU worker with the batches of CPU worker */
+	hammer_gpu_worker_t g;
+	hammer_gpu_worker_init(&g);
 
 	/* Timers for each kernel launch */
 	hammer_timer_restart(&loopcounter);
@@ -154,14 +178,11 @@ void *hammer_gpu_worker_loop(void *arg)
 		hammer_timer_restart(&loopcounter);
 
 
-
-		// Get Buffers
+		/* Get Input Buffer from CPU Workers */
 		//////////////////////////////////////////
 		hammer_timer_restart(&t);
 
-		/* Get Input Buffer from CPU Workers */
-		hammer_gpu_get_batch(g.buf_set);
-		
+		hammer_gpu_get_batch(&g);
 
 		hammer_timer_stop(&t);
 		hammer_log_msg(&log, "\n%s\n", "---------------------------", 0);
@@ -169,6 +190,7 @@ void *hammer_gpu_worker_loop(void *arg)
 			hammer_timer_get_total_time(&t), 10, 1);
 		hammer_log_msg(&log, "%s %d streams\n", " This time we have ", this_stream_num);
 		hammer_log_msg(&log, "%s %d byte\n", " This buffer size is ", this_buffer_size);
+
 
 		//Enqueue a kernel run call.
 		//////////////////////////////////////////

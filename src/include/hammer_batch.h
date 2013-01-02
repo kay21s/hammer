@@ -13,7 +13,6 @@ typedef struct hammer_batch_buf_s
 	unsigned int pkt_offsets_pos;
 	unsigned int ivs_pos;
 	
-
 	// Job for forwarding
 	hammer_job_t *job_list;
 	int job_num;
@@ -40,7 +39,10 @@ typedef struct hammer_batch_s
 	 * GPU write it (0/1), and CPU clears it to -1 to claim its own action.
 	 */
 	int processed_buf_id;
+	pthread_mutex_t mutex_batch_complete; 
+
 	int buf_has_been_taken;
+	pthread_mutex_t mutex_batch_launch; 
 } hammer_batch_t;
 
 #endif

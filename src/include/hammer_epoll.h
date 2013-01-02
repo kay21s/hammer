@@ -22,6 +22,29 @@
 
 #define HAMMER_EPOLL_STATE_INDEX_CHUNK 64
 
+
+/*
+ * 4 callback functions we should set
+ 
+  |                            |                              |
+  |         1. ssl_read        |                              |
+  | ------------------------>  |                              |
+  |                            |          2. write            |
+  |                            |  ------------------------>   |
+  |                            |                              |
+  |                            |                              |
+  |                            |                              |
+  |                            |          3. read             |
+  |                            |  <------------------------   |
+  |                            |                              |
+  |         4. ssl_write       |                              |
+  | <------------------------  |                              |
+  |                            |                              |
+  |                            |                              |
+Client        (SSL)          Proxy         (Socket)         Server
+
+*/
+
 typedef struct hammer_epoll_handlers_s
 {
 	int (*read) (hammer_connection_t *);

@@ -47,12 +47,11 @@ int hammer_dispatcher()
 	int i, ready = 0;
 	int server_fd;
 
-	// waiting for the launch of workers
+	/* waiting for the launch of workers */
 	while (1) {
 		pthread_mutex_lock(&mutex_worker_init);
 		for (i = 0; i < config->cpu_worker_num + config->gpu_worker_num; i++) {
-			if (sched_list[i].initialized)
-				ready++;
+			if (sched_list[i].initialized)	ready++;
 		}
 		pthread_mutex_unlock(&mutex_worker_init);
 
