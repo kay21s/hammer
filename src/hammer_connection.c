@@ -58,9 +58,6 @@ void hammer_init_connection(hammer_connection_t *c)
 	c->r_conn = NULL;
 	c->job_list = NULL;
 
-	c->key = hammer_mem_malloc(config->key_size);
-	c->iv = hammer_mem_malloc(config->iv_size);
-
 	return;
 }
 

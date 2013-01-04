@@ -40,7 +40,9 @@ void crypto_context_sha1_aes_encrypt(crypto_context_t *cry_ctx,
 			const unsigned long  in_pos,
 			const unsigned long  aes_keys_pos,
 			const unsigned long  ivs_pos,
+			const unsigned long  hmac_keys_pos,
 			const unsigned long  pkt_offset_pos,
+			const unsigned long  actual_length_pos,
 			const unsigned long  tot_in_len,
 			const unsigned long  tot_out_len,
 			const unsigned long  num_flows,
@@ -57,7 +59,9 @@ void crypto_context_sha1_aes_encrypt(crypto_context_t *cry_ctx,
 	uint8_t *in_d;
 	uint8_t *aes_keys_d;
 	uint8_t *ivs_d;
+	uint8_t *hmac_keys_d;
 	uint32_t *pkt_offset_d;
+	uint16_t *actual_length_d;
 	void *input_d = stream.input_d;
 
 	/* Calculate # of cuda blks required */
@@ -72,25 +76,31 @@ void crypto_context_sha1_aes_encrypt(crypto_context_t *cry_ctx,
 	in_d         = (uint8_t *) input_d + in_pos;
 	aes_keys_d       = (uint8_t *) input_d + aes_keys_pos;
 	ivs_d        = (uint8_t *) input_d + ivs_pos;
+	hmac_keys_d = (uint8_t *)input_d + hmac_keys_pos;
 	pkt_offset_d = (uint32_t *) ((uint8_t *) input_d + pkt_offset_pos);
+	actual_length_d = (uint16_t *) ((uint8_t *) input_d + actual_length_pos);
 
 	/* Call cbc kernel function to do encryption */
 	if (device_context_use_stream(dev_ctx)) {
-		HMAC_AES_together_gpu(in_d,
+		HMAC_AES_together_gpu(  in_d,
 					cry_ctx->streams[stream_id].output_d,
-					pkt_offset_d,
 					keys_d,
 					ivs_d,
+					hmac_keys_d,
+					pkt_offset_d,
+					actual_length_d,
 					num_flows,
 					device_context_get_dev_checkbits(dev_ctx, stream_id),
 					threads_per_blk,
 					device_context_get_stream(dev_ctx, stream_id));
 	} else {
-		HMAC_AES_together_gpu(in_d,
+		HMAC_AES_together_gpu(  in_d,
 					cry_ctx->streams[stream_id].output_d,
-					pkt_offset_d,
 					keys_d,
 					ivs_d,
+					hmac_keys_d,
+					pkt_offset_d,
+					actual_length_d,
 					num_flows,
 					device_context_get_dev_checkbits(dev_ctx, stream_id),
 					threads_per_blk,

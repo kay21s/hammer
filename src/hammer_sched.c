@@ -6,12 +6,19 @@
 #include "hammer_macros.h"
 #include "hammer_config.h"
 #include "hammer_connection.h"
+#include "hammer_batch.h"
 
 pthread_mutex_t mutex_worker_init = PTHREAD_MUTEX_INITIALIZER;
+pthread_key_t worker_sched_struct;
 
 inline hammer_sched_t *hammer_sched_get_sched_struct()
 {
     return pthread_getspecific(worker_sched_struct);
+}
+
+inline hammer_batch_t *hammer_sched_get_batch_struct()
+{
+    return pthread_getspecific(worker_batch_struct);
 }
 
 int hammer_init_sched_node(hammer_sched_t *sched, int epoll_fd, int thread_id)

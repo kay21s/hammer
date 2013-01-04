@@ -5,13 +5,14 @@
 #include <stdint.h>
 #include <assert.h>
 
-__global__ void computeHMAC_SHA1(
+__global__ void sha1_aes_kernel(
 			const uint8_t	*input_buf,
 			uint8_t		*output_buf,
 			const uint8_t	*aes_keys,
 			uint8_t		*ivs,
-			const char	*sha1_keys,
+			const char	*hmac_keys,
 			const uint32_t	*pkt_offset,
+			const uint16_t  *length,
 			const unsigned int num_flows,
 			uint8_t		*checkbits=0)
 {
@@ -25,15 +26,14 @@ __global__ void computeHMAC_SHA1(
 		uint32_t *w = w_register;
 		hash_digest_t h;
 		uint32_t offset = pkt_offset[idx];
-		unsigned long lenth = pkt_offset[idx + 1] - pkt_offset[idx];
-		//FIXME: where is out
-		uint32_t *out = output_buf + 5 * idx;
+		unsigned long length = length[idx];
 
+		uint16_t sha1_pad_len = (length + 63 + 9) & (~0x3F);
+		uint32_t *sha1_out = intput_buf + offset + sha1_pad_len;
 
 		for (unsigned i = 0; i < 16; i++)
 			w[i] = 0x36363636;
-		xorpads(w, (uint32_t*)(sha1_keys + 64 * idx));
-
+		xorpads(w, (uint32_t*)(hmac_keys + 64 * idx));
 
 		h.h1 = 0x67452301;
 		h.h2 = 0xEFCDAB89;
@@ -47,13 +47,13 @@ __global__ void computeHMAC_SHA1(
 		//SHA1 compute on mesage
 		unsigned num_iter = (length + 63 + 9) / 64;
 		for (unsigned i = 0; i < num_iter; i++)
-			computeSHA1Block(input_buf + offset , w, i * 64  , length , h);
+			computeSHA1Block(input_buf + offset, w, i * 64, length, h);
 
-		*(out)   = swap(h.h1);
-		*(out+1) = swap(h.h2);
-		*(out+2) = swap(h.h3);
-		*(out+3) = swap(h.h4);
-		*(out+4) = swap(h.h5);
+		*(sha1_out)   = swap(h.h1);
+		*(sha1_out+1) = swap(h.h2);
+		*(sha1_out+2) = swap(h.h3);
+		*(sha1_out+3) = swap(h.h4);
+		*(sha1_out+4) = swap(h.h5);
 
 		h.h1 = 0x67452301;
 		h.h2 = 0xEFCDAB89;
@@ -64,20 +64,19 @@ __global__ void computeHMAC_SHA1(
 		for (unsigned i = 0; i < 16; i++)
 			w[i] = 0x5c5c5c5c;
 
-		xorpads(w, (uint32_t*)(sha1_keys + 64 * idx));
+		xorpads(w, (uint32_t*)(hmac_keys + 64 * idx));
 
 		//SHA 1 compute on opads
 		computeSHA1Block((char*)w, w, 0, 64, h);
 
 		//SHA 1 compute on (hash of ipad|m)
-		computeSHA1Block((char*)out, w, 0, 20, h);
+		computeSHA1Block((char*)sha1_out, w, 0, 20, h);
 
-		// FIXME: where does it put ??????
-		*(out)   = swap(h.h1);
-		*(out+1) = swap(h.h2);
-		*(out+2) = swap(h.h3);
-		*(out+3) = swap(h.h4);
-		*(out+4) = swap(h.h5);
+		*(sha1_out)   = swap(h.h1);
+		*(sha1_out+1) = swap(h.h2);
+		*(sha1_out+2) = swap(h.h3);
+		*(sha1_out+3) = swap(h.h4);
+		*(sha1_out+4) = swap(h.h5);
 	}
         __syncthreads();
 
@@ -120,7 +119,8 @@ __global__ void computeHMAC_SHA1(
 	const uint8_t *key = idx * 16 + aes_keys;
 	uint8_t *ivec      = idx * AES_BLOCK_SIZE + ivs;
 
-	/* Encrypt using cbc mode */
+	/* Encrypt using cbc mode, this is the actual length for encryption
+	 * which has already been padded in application */
 	unsigned long len = pkt_offset[idx + 1] - pkt_offset[idx];
 	const unsigned char *iv = ivec;
 
@@ -162,8 +162,9 @@ void co_sha1_aes_gpu(
 			uint8_t		*out,
 			const uint8_t	*aes_keys,
 			uint8_t		*ivs,
-			const char	*sha1_keys,
+			const char	*hmac_keys,
 			const uint32_t	*pkt_offset,
+			const uint16_t	*actual_length,
 			const unsigned int num_flows,
 			uint8_t		*checkbits,
 			unsigned	threads_per_blk,
@@ -173,9 +174,9 @@ void co_sha1_aes_gpu(
 
 	if (stream == 0) {
 		sha1_aes_kernel<<<num_blks, threads_per_blk>>>(
-		       in, out, aes_keys, ivs, sha1_keys, pkt_offset, num_flows, checkbits);
+		       in, out, aes_keys, ivs, hmac_keys, pkt_offset, actual_length, num_flows, checkbits);
 	} else  {
 		sha1_aes_kernel<<<num_blks, threads_per_blk, 0, stream>>>(
-		       in, out, aes_keys, ivs, sha1_keys, pkt_offset, num_flows, checkbits);
+		       in, out, aes_keys, ivs, hmac_keys, pkt_offset, actual_length, num_flows, checkbits);
 	}
 }

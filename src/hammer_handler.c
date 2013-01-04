@@ -90,13 +90,17 @@ hammer_connection_t *hammer_handler_accept(int server_socket)
 	/* Get a connection and associate with the epoll event */
 	c = hammer_get_connection();
 	hammer_init_connection(c);
-	/* Accepted connection must be a SSL connection from client */
-	c->ssl = 1;
 
 	if (config->ssl) {
+		/* Accepted connection must be a SSL connection from client */
+		c->ssl = 1;
+
 		/* SSL initialization and accept */
 		hammer_openssl_init(c);
 		ret = hammer_openssl_accept(c);
+
+		/* Get Parameters AES key, iv, hmac key, rounds */
+		hammer_openssl_get_parameters(c);
 	}
 
 	return c;
@@ -118,7 +122,8 @@ int hammer_handler_close(hammer_connection_t *c)
 	return 0;
 }
 
-/* Write to server */
+/* Write to server, this is also used for writing to clients when we accelerate 
+ * encryption and HMAC with GPU, and we just send the whole packet with this */
 int hammer_handler_write(hammer_connection_t *c)
 {
 	int send;
@@ -154,7 +159,7 @@ int hammer_handler_write(hammer_connection_t *c)
 	return 0;
 }
 
-/* read from clients */
+/* read from clients, the SSL connection */
 int hammer_handler_ssl_read(hammer_connection_t *c)
 {
 	int recv, available;
@@ -222,7 +227,7 @@ int hammer_handler_ssl_read(hammer_connection_t *c)
 	return recv;
 }
 
-/* Write to clients */
+/* Write to clients, when we accelerate encryption with GPU, we do not use this function */
 int hammer_handler_ssl_write(hammer_connection_t *c)
 {
 	int send;

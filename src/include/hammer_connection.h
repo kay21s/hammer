@@ -13,8 +13,8 @@
 // All events are forwarding event
 typedef struct hammer_job_s
 {
-	int job_body_length;
-	int job_pad_length;
+	int job_body_length; // padded length
+	int job_actual_length;
 	char *job_body_ptr;
 
 	/* which connection this job belongs */
@@ -40,8 +40,9 @@ typedef struct hammer_connection_s
 	SSL *ssl_handle;
 	SSL_CTX *ssl_context;
 
-	char key[AES_KEY_SIZE];
+	char aes_key[AES_KEY_SIZE];
 	char iv[AES_IV_SIZE];
+	char hmac_key[HMAC_KEY_SIZE];
 
 } hammer_connection_t;
 

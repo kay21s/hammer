@@ -10,7 +10,7 @@
 #define HAMMER_SCHED_WORKER_CPU	2
 #define HAMMER_SCHED_WORKER_GPU	3
 
-pthread_key_t worker_sched_struct;
+extern pthread_key_t worker_sched_struct;
 
 typedef struct hammer_sched_s {
 	int epoll_fd;

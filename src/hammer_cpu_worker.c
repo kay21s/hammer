@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <sys/syscall.h>
 #include <string.h>
+#include <sched.h>
 
 #include "hammer.h"
 #include "hammer_connection.h"
@@ -17,29 +18,16 @@
 #include "hammer_macros.h"
 #include "hammer_batch.h"
 
-pthread_key_t worker_sched_struct;
-pthread_key_t worker_batch;
-
 void *hammer_epoll_start(int efd, hammer_epoll_handlers_t *handler, int max_events)
 {
 	int i, fd, ret = -1;
 	int num_events;
-	// int fds_timeout;
-
 	struct epoll_event *events;
-	hammer_sched_t *sched;
 	hammer_connection_t *c;
-
-	/* Get sched node */
-	sched = hammer_sched_get_sched_struct();
+	// int fds_timeout;
 
 	//fds_timeout = log_current_utime + config->timeout;
 	events = hammer_mem_malloc(max_events * sizeof(struct epoll_event));
-
-	/* Notify the dispatcher that this thread has been created */
-	pthread_mutex_lock(&mutex_worker_init);
-	sched->initialized = 1;
-	pthread_mutex_unlock(&mutex_worker_init);
 
 	while (1) {
 
@@ -53,7 +41,7 @@ void *hammer_epoll_start(int efd, hammer_epoll_handlers_t *handler, int max_even
 		//FIXME: maybe problems in pointer &events
 		num_events = hammer_epoll_wait(efd, &events, max_events);
 
-		for (i = 0; i < num_events; i++) {
+		for (i = 0; i < num_events; i ++) {
 			c = (hammer_connection_t *) events[i].data.ptr;
 			fd = events[i].data.fd;
 
@@ -99,31 +87,47 @@ void *hammer_epoll_start(int efd, hammer_epoll_handlers_t *handler, int max_even
 }
 
 /* created thread, all this calls are in the thread context */
-void *hammer_cpu_worker_loop(void *thread_sched)
+void *hammer_cpu_worker_loop(void *context)
 {
-	hammer_sched_t *sched = thread_sched;
+	hammer_cpu_worker_context_t *my_context = (hammer_cpu_worker_context_t *)context;
+	hammer_sched_t *sched = context->sched;
+	hammer_batch_t *batch = context->batch;
+	int core_id = context->core_id;
 	hammer_epoll_handlers_t *handler;
+	unsigned long mask = 0;
+
+	/* Set affinity of this cpu worker */
+	mask = 1 << core_id;
+	if (sched_setaffinity(0, sizeof(unsigned long), &mask) < 0) {
+		hammer_err("Err set affinity in GPU worker\n");
+		exit(0);
+	}
 
 	handler = hammer_epoll_set_handlers((void *) hammer_handler_batch_read,
 			(void *) hammer_handler_ssl_read,
 			(void *) hammer_handler_write, 
-			(void *) hammer_handler_ssl_write,
+			(void *) hammer_handler_write, // write directly, we have already encrypted the message
 			(void *) hammer_handler_error,
 			(void *) hammer_handler_close,
 			(void *) hammer_handler_close);
 
 	/* Export known scheduler node to context thread */
-	pthread_setspecific(worker_sched_struct, (void *) sched);
+	pthread_setspecific(worker_sched_struct, (void *)sched);
 	__builtin_prefetch(sched);
 	__builtin_prefetch(&worker_sched_struct);
 
-	// FIXME
-	pthread_setspecific(worker_batch, (void *) batch);
+	pthread_setspecific(worker_batch_struct, (void *)batch);
 	__builtin_prefetch(batch);
-	__builtin_prefetch(&worker_batch);
+	__builtin_prefetch(&worker_batch_struct);
+
 	/* Allocate the batch buffers, each cpu worker has a set of buffers,
 	 * two as input buffer, and two as output buffer. */
 	hammer_batch_init();
+
+	/* Notify the dispatcher and the GPU worker that this thread has been created */
+	pthread_mutex_lock(&mutex_worker_init);
+	sched->initialized = 1;
+	pthread_mutex_unlock(&mutex_worker_init);
 
 	/* Init epoll_wait() loop */
 	hammer_epoll_start(sched->epoll_fd, handler, sched->epoll_max_events);

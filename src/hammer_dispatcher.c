@@ -44,21 +44,24 @@ int hammer_dispatcher_loop(int server_fd)
 
 int hammer_dispatcher()
 {
-	int i, ready = 0;
+	int i, ready;
 	int server_fd;
 
 	/* waiting for the launch of workers */
 	while (1) {
+		ready = 0;
+
 		pthread_mutex_lock(&mutex_worker_init);
 		for (i = 0; i < config->cpu_worker_num + config->gpu_worker_num; i++) {
 			if (sched_list[i].initialized)	ready++;
 		}
 		pthread_mutex_unlock(&mutex_worker_init);
 
-		if (ready == config->workers) break;
+		if (ready == config->cpu_worker_num + config->gpu_worker_num) break;
 		usleep(10000);
 	}
 
+	/* Listen on the socket */
 	server_fd = hammer_handler_listen();
 
 	/* Server loop, let's listen for incomming clients */

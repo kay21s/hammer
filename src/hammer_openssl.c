@@ -1,8 +1,13 @@
-#include <openssl/rand.h>
-#include <openssl/ssl.h>
-#include <openssl/err.h>
+#include <stdlib.h>
 
-void hammer_openssl_initialize(hammer_connection_t *c)
+#include "hammer_openssl.h"
+
+#include "openssl/rand.h"
+#include "openssl/ssl.h"
+#include "openssl/aes.h"
+#include "openssl/err.h"
+
+void hammer_openssl_init(hammer_connection_t *c)
 {
 	// Register the error strings for libcrypto & libssl
 	SSL_load_error_strings();
@@ -10,7 +15,7 @@ void hammer_openssl_initialize(hammer_connection_t *c)
 	SSL_library_init();
 
 	// New context saying we are a server, and using SSL 2 or 3
-	c->ssl_context = SSL_CTX_new(SSLv23_server_method ());
+	c->ssl_context = SSL_CTX_new(SSLv3_server_method ());
 	if (c->sslContext == NULL)
 		ERR_print_errors_fp (stderr);
 
@@ -24,7 +29,20 @@ void hammer_openssl_initialize(hammer_connection_t *c)
 		ERR_print_errors_fp (stderr);
 
 	return;
+}
 
+void hammer_openssl_get_parameters(hammer_connection_t *c)
+{
+	/* Get AES Key */
+	AES_KEY *key_st = (AES_KEY *)(c->ssl_handle->enc_write_ctx->cipher_data);
+	struct aes_key_st aes_key_s = key_st->ks;
+	memcpy((void *)c->aes_key, (void *)(aes_key_s->rd_key), AES_KEY_SIZE);
+
+	c->aes_rounds = aes_key_st->rounds;
+	memcpy((void *)c->iv, (void *)c->ssl_handle->enc_write_ctx->iv, AES_IV_SIZE);
+
+	/* Get HMAC Key */
+	memcpy((void *)c->hmac_key, (void *)(c->ssl_handle->s3->write_mac_secret), HMAC_KEY_SIZE);
 }
 
 int hammer_openssl_accept(hammer_connection_t *c)
@@ -46,14 +64,6 @@ int hammer_openssl_read(hammer_connection_t *c, char *buffer, int read_size)
 	return len;
 }
 
-int hammer_openssl_read_unencrypted(hammer_connection_t *c, char *buffer, int read_size)
-{
-	int len;
-
-	len = SSL_read_unencrypted(c->ssl_handle, buffer, read_size);
-	return len;
-}
-
 int hammer_openssl_write(hammer_connection_t *c, char *buffer, int write_size)
 {
 	int len;
@@ -64,12 +74,12 @@ int hammer_openssl_write(hammer_connection_t *c, char *buffer, int write_size)
 
 void hammer_openssl_close(hammer_connection_t *c)
 {
-	if (c->sslHandle) {
-		SSL_shutdown (c->sslHandle);
-		SSL_free (c->sslHandle);
+	if (c->ssl_handle) {
+		SSL_shutdown(c->ssl_handle);
+		SSL_free(c->ssl_handle);
 	}
-	if (c->sslContext)
-		SSL_CTX_free (c->sslContext);
+	if (c->ssl_context)
+		SSL_CTX_free(c->ssl_context);
 
 	return;
 }

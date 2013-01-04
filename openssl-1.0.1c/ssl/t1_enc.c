@@ -553,7 +553,7 @@ printf("which = %04X\nmac key=",which);
 
 	/* Needed for "composite" AEADs, such as RC4-HMAC-MD5 */
 	if ((EVP_CIPHER_flags(c)&EVP_CIPH_FLAG_AEAD_CIPHER) && *mac_secret_size)
-		EVP_CIPHER_CTX_ctrl(dd,EVP_CTRL_AEAD_SET_MAC_KEY,
+		EVP_CIPHER_CTX_ctrl(dd,EVP_CTRL_AEAD_SET_MAC_KEY, // FIXME
 				*mac_secret_size,mac_secret);
 
 #ifdef TLS_DEBUG

@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <sys/syscall.h>
 #include <string.h>
+#include <sched.h>
 
 #include "hammer.h"
 #include "hammer_connection.h"
@@ -37,13 +38,11 @@ void hammer_gpu_get_batch(hammer_gpu_worker_t *g, hammer_batch_buf_t *batch_set)
 		batch = &(batch_set[i]);
 
 		if (batch->buf_has_been_taken == -1) {
-
 			pthread_mutex_lock(&(batch->mutex_batch_launch));
 			id = batch->buf_has_been_taken = batch->cur_buf_id;
 			pthread_mutex_unlock(&(batch->mutex_batch_launch));
 			
 			assert(id == g->buf_set_id);
-
 		} else {
 			hammer_err("error in hammer_gpu_take_buf\n");
 			exit(0);
@@ -79,7 +78,7 @@ void hammer_gpu_give_result(hammer_gpu_worker_t *g, hammer_batch_buf_t *batch_se
 	return ;
 }
 
-void hammer_gpu_worker_init(hammer_gpu_worker_t *g)
+void hammer_gpu_worker_init(hammer_gpu_worker_t *g, hammer_batch_t *batch_set, hammer_sched_t *sched_set)
 {
 	int i = 0;
 
@@ -104,23 +103,39 @@ void hammer_gpu_worker_init(hammer_gpu_worker_t *g)
 	 */
 	uint32_t input_size = config->batch_buf_max_size +
 		config->batch_job_max_num * AES_KEY_SIZE +
+		config->batch_job_max_num * AES_IV_SIZE +
 		config->batch_job_max_num * PKT_OFFSET_SIZE + // input buffer
-		config->batch_job_max_num * AES_IV_SIZE;
+		config->batch_job_max_num * LENGTH_SIZE +
+		config->batch_job_max_num * HMAC_KEY_SIZE;
 	uint32_t output_size = config->batch_buf_max_size;
 
 	crypto_context_init(&(g->cry_ctx), input_size, output_size, config->cpu_worker_num);
 
 	/* Tell the dispatcher that GPU worker is ready too */
-	sched_list[gpu_worker_id].initialized = 1;
+	pthread_mutex_lock(&mutex_worker_init);
+	sched_set[config->cpu_worker_num].initialized = 1;
+	pthread_mutex_unlock(&mutex_worker_init);
 
 	return;
 }
 
 /* created thread, all this calls are in the thread context */
-void *hammer_gpu_worker_loop(void *arg)
+void *hammer_gpu_worker_loop(void *context)
 {
 	hammer_timer_t t, counter, loopcounter;
 	hammer_log_t log;
+	hammer_batch_t *batch_set = context->cpu_batch_set;
+	hammer_sched_t *sched_set = context->sched_set;
+	int ready, core_id = context->core_id;
+	unsigned long mask = 0;
+	double elapsed_time;
+
+	/* Set affinity of this gpu worker */
+	mask = 1 << core_id;
+	if (sched_setaffinity(0, sizeof(unsigned long), &mask) < 0) {
+		hammer_err("Err set affinity in GPU worker\n");
+		exit(0);
+	}
 
 	/* Init timers */
 	hammer_timer_init(&t);
@@ -130,9 +145,11 @@ void *hammer_gpu_worker_loop(void *arg)
 
 	/* Synchronization, Wait for CPU workers */
 	while (1) {
+		ready = 0;
+
 		pthread_mutex_lock(&mutex_worker_init);
 		for (i = 0; i < config->cpu_worker_num; i++) {
-			if (sched_list[i].initialized)	ready++;
+			if (sched_set[i].initialized)	ready++;
 		}
 		pthread_mutex_unlock(&mutex_worker_init);
 
@@ -143,7 +160,7 @@ void *hammer_gpu_worker_loop(void *arg)
 	/* Initialize GPU worker, we wait for that all CPU workers have been initialized
 	 * then we can init GPU worker with the batches of CPU worker */
 	hammer_gpu_worker_t g;
-	hammer_gpu_worker_init(&g);
+	hammer_gpu_worker_init(&g, batch_set, sched_set);
 
 	/* Timers for each kernel launch */
 	hammer_timer_restart(&loopcounter);
@@ -168,11 +185,11 @@ void *hammer_gpu_worker_loop(void *arg)
 				first = 0;
 			}
 
-			if (elapsed_time - time_point > 1) { // surpassed the time point more than 1 ms
+			if (elapsed_time - config->I > 1) { // surpassed the time point more than 1 ms
 				hammer_log_msg(&log, "\n%s %d\n", ">>>>>>>>Time point lost!!!! : ", elapsed_time);
 				break;
 			}
-		} while (abs(elapsed_time - time_point) > 1);
+		} while (abs(elapsed_time - config->I) > 1);
 
 		hammer_timeLog_msg(&log, "%s %d\n", ">>>>>>>>Time point arrived : ", elapsed_time);
 		hammer_timer_restart(&loopcounter);
@@ -182,14 +199,12 @@ void *hammer_gpu_worker_loop(void *arg)
 		//////////////////////////////////////////
 		hammer_timer_restart(&t);
 
-		hammer_gpu_get_batch(&g);
+		hammer_gpu_get_batch(&g, batch_set);
 
 		hammer_timer_stop(&t);
 		hammer_log_msg(&log, "\n%s\n", "---------------------------", 0);
 		hammer_log_timer(&log, "%s %f ms\n", "Get Input Time",
 			hammer_timer_get_total_time(&t), 10, 1);
-		hammer_log_msg(&log, "%s %d streams\n", " This time we have ", this_stream_num);
-		hammer_log_msg(&log, "%s %d byte\n", " This buffer size is ", this_buffer_size);
 
 
 		//Enqueue a kernel run call.
@@ -201,15 +216,17 @@ void *hammer_gpu_worker_loop(void *arg)
 			buf_t = buf_set[cuda_stream_id];
 
 			crypto_context_sha1_aes_encrypt (
-				&cry_ctx;
+				&cry_ctx,
 				buf_t->input_buf,
 				buf_t->output_buf,
 				0, // in_pos
 				buf_t->aes_keys_pos,
-				buf_t->pkt_offset_pos,
 				buf_t->ivs_pos,
+				buf_t->hmac_keys_pos,
+				buf_t->pkt_offset_pos,
+				buf_t->length_pos,
 				buf_t->buf_size, // input buffer size
-				buf_t->buf_length +, // output buffer size FIXME ???
+				buf_t->buf_length, // output buffer size FIXME ???
 				buf_t->job_num,
 				cuda_stream_id,
 				128);
@@ -221,6 +238,9 @@ void *hammer_gpu_worker_loop(void *arg)
 		hammer_timer_stop(&t);
 		hammer_log_timer(&log, "%s %f ms\n", "Execution Time",
 			hammer_timer_get_total_time(&t), 10, 1);
+		
+		/* Tell the CPU workers that this batch has been processed */
+		hammer_gpu_give_result(&g, batch_set);
 
 		hammer_log_msg(&log, "%s %dth iteration\n", "This is", i);
 		//if (i > 1)	timeLog->Msg( "%s %f ms\n", "Time after is", counter.GetElapsedTime());
@@ -229,9 +249,6 @@ void *hammer_gpu_worker_loop(void *arg)
 	hammer_timer_stop(&counter);
 	printf("End of execution, now the program costs : %d ms\n", hammer_timer_get_total_time(&counter));
 	printf("Processing speed is %.2f Mbps\n", (bytes * 8) / (1e3 * hammer_timer_get_total_time(&counter)));
-
-	uint64_t speed = (AVG_RATE/1000) * (STREAM_NUM/1000);
-	printf("Theoretical speed is %lld Mbps\n", speed);
 
 	return 0;
 }
