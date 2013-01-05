@@ -10,6 +10,7 @@
 
 pthread_mutex_t mutex_worker_init = PTHREAD_MUTEX_INITIALIZER;
 pthread_key_t worker_sched_struct;
+pthread_key_t worker_batch_struct;
 
 inline hammer_sched_t *hammer_sched_get_sched_struct()
 {
@@ -61,7 +62,7 @@ int hammer_sched_next_worker_id()
 	id = -1;
 
 	for (i = pre_id + 1; i < config->workers; i ++) {
-		sched = &(sched_list[i]);
+		sched = &(sched_set[i]);
 		if (sched->if_want_new == HAMMER_SCHED_WANT_NEW) {
 			id = i;
 			break;
@@ -71,7 +72,7 @@ int hammer_sched_next_worker_id()
 	if (id == -1) {
 		/* not find any available worker in previous search */
 		for (i = 0; i <= pre_id; i ++) {
-			sched = &(sched_list[i]);
+			sched = &(sched_set[i]);
 			if (sched->if_want_new == HAMMER_SCHED_WANT_NEW) {
 				id = i;
 				break;

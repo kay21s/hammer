@@ -1,6 +1,7 @@
 #ifndef HAMMER_BATCH_H
 #define HAMMER_BATCH_H
 
+#include <pthread.h>
 #include "hammer_connection.h"
 
 typedef struct hammer_batch_buf_s

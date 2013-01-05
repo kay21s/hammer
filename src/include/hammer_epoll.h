@@ -45,7 +45,7 @@ Client        (SSL)          Proxy         (Socket)         Server
 
 */
 
-typedef struct hammer_epoll_handlers_s
+typedef struct
 {
 	int (*read) (hammer_connection_t *);
 	int (*ssl_read) (hammer_connection_t *);
@@ -56,7 +56,7 @@ typedef struct hammer_epoll_handlers_s
 	int (*timeout) (hammer_connection_t *);
 } hammer_epoll_handlers_t;
 
-/* Monkey epoll calls */
+/* Hammer epoll calls */
 int hammer_epoll_create(int max_events);
 void *hammer_epoll_init(int efd, hammer_epoll_handlers_t *handler, int max_events);
 

@@ -1,15 +1,20 @@
 CC = gcc
 
+CFLAGS = -Wall -g -Wall
+LIBS = -lpthread -lcrypto
+
 OPENSSL_DIR = ../openssl-1.0.1c
 ifneq ($(OPENSSL_DIR), )
 	OPENSSL_LIBDIR = -L$(OPENSSL_DIR)/lib64
 	OPENSSL_INCDIR = -I$(OPENSSL_DIR)/include
 endif
-INC = $(OPENSSL_INCDIR)
 
-HEADER_DIR = include
+HEADER_DIR = ./include
+LIBCRYPTO_DIR = ../libgpucrypto
 OBJECT_DIR = objs
 TARGET_DIR = ..
+INC = $(HEADER_DIR)
+
 TARGET_FILE = hammer
 TARGET = $(addprefix $(TARGET_DIR)/, $(TARGET_FILE))
 
@@ -19,19 +24,17 @@ OBJECT_FILE = $(SOURCE_FILES:.c=.o)
 
 OBJECT = $(addprefix $(OBJECT_DIR)/, $(OBJECT_FILE))
 
+all: $(TARGET)
+
+$(TARGET): $(OBJECT) | $(TARGET_DIR) $(OBJECT_DIR)
+	$(CC) $(OBJECT) -o $@ $(LIBS)
+
 $(OBJECT_DIR):
 	mkdir $(OBJECT_DIR)
 
-CFLAGS = -Wall -g -Wall
-LIBS = -lpthread -lcrypto
 
 $(OBJECT_DIR)/%.o : %.c
-	$(CC) $(CFLAGS) $(INC) -c $< -o $@
-
-all: $(TARGET)
-
-$(TARGET): $(OBJS) | $(TARGET_DIR) $(OBJECT_DIR)
-	$(CC) $(OBJECT) -o $@ $(LIBS)
+	$(CC) $(CFLAGS) -I $(INC) -I $(LIBCRYPTO_DIR) -c $< -o $@
 
 .PHONY : clean
 clean:

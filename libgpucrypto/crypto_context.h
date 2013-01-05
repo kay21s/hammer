@@ -22,6 +22,25 @@ typedef struct crypto_context_s {
  */
 void crypto_context_init(crypto_context_t *cry_ctx, device_context_t *dev_ctx);
 
+
+/**
+ * WOW~ I combined aes and sha1 in the same kernel execution.
+ */
+void crypto_context_sha1_aes_encrypt(crypto_context_t *cry_ctx,
+			const void	     *input_start,
+			void		     *output_start,
+			const unsigned long  in_pos,
+			const unsigned long  aes_keys_pos,
+			const unsigned long  ivs_pos,
+			const unsigned long  hmac_keys_pos,
+			const unsigned long  pkt_offset_pos,
+			const unsigned long  actual_length_pos,
+			const unsigned long  tot_in_len,
+			const unsigned long  tot_out_len,
+			const unsigned long  num_flows,
+			const unsigned int   stream_id,
+			const unsigned int   bits);
+
 /**
  * It executes AES-CBC encryption in GPU.
  *

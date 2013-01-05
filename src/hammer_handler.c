@@ -15,12 +15,12 @@
 #include "hammer.h"
 
 /* connect to server */
-int hammer_handler_connect(hammer_connection_t *conn)
+int hammer_handler_connect(hammer_connection_t *c)
 {
 	struct sockaddr_in address;
 	int ret, socket;
 	hammer_sched_t *sched = hammer_sched_get_sched_struct();
-	hammer_connection_t *c;
+	hammer_connection_t *new_c;
 
 	socket = hammer_socket_create();
 
@@ -35,11 +35,11 @@ int hammer_handler_connect(hammer_connection_t *conn)
 	}
 
 	/* Get a connection and associate with the epoll event */
-	c = hammer_get_connection();
-	hammer_init_connection(c);
+	new_c = hammer_get_connection();
+	hammer_init_connection(new_c);
 
 	/* Assign socket to worker thread */
-	hammer_sched_add_connection(c, sched, conn);
+	hammer_sched_add_connection(new_c, sched, c);
 
 	return 0;
 }

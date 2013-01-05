@@ -11,6 +11,7 @@
 #include "hammer_dispatcher.h"
 #include "hammer_cpu_worker.h"
 #include "hammer_gpu_worker.h"
+#include "libpool.h"
 
 /*
   |                            |                              |
@@ -33,7 +34,8 @@ Client        (SSL)          Proxy         (Socket)         Server
 */
 
 
-hammer_batch_t *batch_list;
+hammer_config_t *config;
+hammer_batch_t *batch_set;
 
 int hammer_config_init()
 {
@@ -41,9 +43,12 @@ int hammer_config_init()
 
 	config = hammer_mem_calloc(sizeof(hammer_config_t));
 
+	config->ssl = 0; // if this is a ssl proxy
+	config->gpu = 0; // if this need batch processing by GPU
+
 	config->cpu_worker_num = 1;
 	config->gpu_worker_num = 0;
-	config->workers = config->cpu_worker_num + config->gpu_worker_num;
+	config->worker_num = config->cpu_worker_num + config->gpu_worker_num;
 	config->epoll_max_events = 128;
 
 	length = strlen("219.219.216.11");
@@ -58,11 +63,8 @@ int hammer_config_init()
 
 	config->conn_buffer_size = 4096;
 
-	config->ssl = 0; // if this is a ssl proxy
-	config->gpu = 0; // if this need batch processing by GPU
-
-	config->core_ids = hammer_mem_malloc(config->workers * sizeof(unsigned int));
-	for (i = 0; i < config->workers; i ++) {
+	config->core_ids = hammer_mem_malloc(config->worker_num * sizeof(unsigned int));
+	for (i = 0; i < config->worker_num; i ++) {
 		/* currently, we use this sequence */
 		config->core_ids[i] = i;
 	}
@@ -73,12 +75,12 @@ int hammer_config_init()
 	   Take 64 bytes minimum packet size, at most 782 jobs each batch,
 	   we allocate 1000 jobs at most.
 	   */
-	config->batch_buf_max_size = config->time_interval * 1.25 * 1000; // byte
+	config->batch_buf_max_size = config->I * 1.25 * 1000; // byte
 	config->batch_job_max_num = 1000;
 
-	config->key_size = 128/8; // byte
-	config->iv_size = 128/8; // byte
-	config->hmac_key_size = 64 // for sha1, byte
+	config->aes_key_size = 16; // 128/8 byte
+	config->iv_size = 16; // 128/8 byte
+	config->hmac_key_size = 64; // for sha1, byte
 
 	/*
 
@@ -100,25 +102,35 @@ int hammer_config_init()
 }
 
 
-int hammer_sched_init()
+int hammer_init_sched_set()
 {
 	int i;
 
-	sched_list = (hammer_sched_t *)hammer_mem_malloc(config->cpu_worker_num * sizeof(hammer_sched_t));
-	for (i = 0; i < config->cpu_worker_num; i ++) {
-		hammer_init_sched_node((hammer_sched_t *)&(sched_list[i]), -1, -1);
+	sched_set = (hammer_sched_t *)hammer_mem_malloc(config->worker_num * sizeof(hammer_sched_t));
+	for (i = 0; i < config->worker_num; i ++) {
+		hammer_init_sched_node((hammer_sched_t *)&(sched_set[i]), -1, -1);
 	}
 
 	return 0;
 }
 
-int hammer_batch_init()
+int hammer_init_batch_set()
 {
-	batch_list = (hammer_batch_t *)hammer_mem_malloc(config->cpu_worker_num * sizeof(hammer_batch_t));
+	batch_set = (hammer_batch_t *)hammer_mem_malloc(config->cpu_worker_num * sizeof(hammer_batch_t));
 	return 0;
 }
 
-void hammer_thread_keys_init()
+int hammer_init_libpool()
+{
+	libpool_init();
+
+	for (i = 0; i < config->cpu_worker_num; i ++) {
+		libpool_init_size(JOB_SIZE, config->cpu_job_max_num, sizeof(hammer_job_t), i);
+		libpool_init_size(CONN_SIZE, config->cpu_conn_max_num, sizeof(hammer_connection_t), i);
+	}
+}
+
+void hammer_init_thread_keys()
 {
 	pthread_key_create(&worker_sched_struct, NULL);
 	pthread_key_create(&worker_batch_struct, NULL);
@@ -141,13 +153,11 @@ int hammer_launch_cpu_workers()
 
 		/* pass a memory block to each worker */
 		context = (hammer_cpu_worker_context_t *)hammer_mem_malloc(sizeof(hammer_cpu_worker_context_t));
-		sched_node = &(sched_list[i]);
+		sched_node = &(sched_set[i]);
 		hammer_init_sched_node(sched_node, efd, i);
 		context->sched = sched_node;
-		batch_node = &(batch_list[i]);
-		context->batch = batch_node;
-		core_id = config->core_ids[i];
-		context->core_id = core_id;
+		context->batch = &(batch_set[i]);
+		context->core_id = config->core_ids[i];
 
 		pthread_attr_init(&attr);
 		pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
@@ -175,9 +185,9 @@ int hammer_launch_gpu_workers()
 
 		/* pass a memory block to each worker */
 		context = (hammer_gpu_worker_context_t *)hammer_mem_malloc(sizeof(hammer_gpu_worker_context_t));
-		context->cpu_batch_set = batch_list;
+		context->cpu_batch_set = batch_set;
 		context->core_id = config->core_ids[thread_id];
-		sched_node = &(sched_list[i]);
+		sched_node = &(sched_set[i]);
 		hammer_init_sched_node(sched_node, 0, thread_id);
 		context->sched = sched_node;
 
@@ -194,16 +204,18 @@ int hammer_launch_gpu_workers()
 
 int main()
 {
-	hammer_config_init();
+	hammer_init_config();
 
-	hammer_sched_init();
-	hammer_batch_init();
+	hammer_init_libpool();
+
+	hammer_init_sched_set();
+	hammer_init_batch_set();
 	//hammer_connection_init();
-	hammer_thread_keys_init();
+	hammer_init_thread_keys();
 
 	/* Launch workers first*/
 	hammer_launch_cpu_workers();
-	hammer_launch_gpu_workers();
+	if (config->gpu) hammer_launch_gpu_workers();
 
 	/* the main function becomes the dispatcher and enters the dispatcher loop*/
 	hammer_dispatcher();

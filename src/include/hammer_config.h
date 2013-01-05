@@ -1,12 +1,10 @@
 #ifndef HAMMER_CONFIG_H
 #define HAMMER_CONFIG_H
 
-#include "hammer_memory.h"
-
 typedef struct hammer_config_s {
 	unsigned int cpu_worker_num;
 	unsigned int gpu_worker_num;
-	int workers; // cpu_worker_num + gpu_worker_num
+	unsigned int worker_num; // cpu_worker_num + gpu_worker_num
 	unsigned int epoll_max_events;
 
 	char *server_ip;
@@ -30,10 +28,7 @@ typedef struct hammer_config_s {
 	/* we currently not use these */
 	unsigned int aes_key_size;
 	unsigned int iv_size;
-	unsigned int hmac_key_size
+	unsigned int hmac_key_size;
 } hammer_config_t;
-
-hammer_config_t *config;
-
 
 #endif

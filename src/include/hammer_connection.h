@@ -3,25 +3,13 @@
 
 #include "hammer_list.h"
 #include "openssl/ssl.h"
+#include "../../libgpucrypto/crypto_size.h"
 
 #define HAMMER_EVENT_READ	0
 #define HAMMER_EVENT_WRITE	1
 
 #define HAMMER_SSL_ON		0
 #define HAMMER_SSL_OFF		1
-
-// All events are forwarding event
-typedef struct hammer_job_s
-{
-	int job_body_length; // padded length
-	int job_actual_length;
-	char *job_body_ptr;
-
-	/* which connection this job belongs */
-	hammer_connection_t *connection;
-
-	struct hammer_list _head;
-} hammer_job_t;
 
 typedef struct hammer_connection_s
 {
@@ -45,6 +33,19 @@ typedef struct hammer_connection_s
 	char hmac_key[HMAC_KEY_SIZE];
 
 } hammer_connection_t;
+
+// All events are forwarding event
+typedef struct hammer_job_s
+{
+	int job_body_length; // padded length
+	int job_actual_length;
+	char *job_body_ptr;
+
+	/* which connection this job belongs */
+	hammer_connection_t *connection;
+
+	struct hammer_list _head;
+} hammer_job_t;
 
 int hammer_conn_job_add(hammer_connection_t *c, int length);
 int hammer_conn_job_del(hammer_job_t *job);

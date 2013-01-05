@@ -1,7 +1,8 @@
-#ifndef HAMMER_CPU_WORKER_H
-#define HAMMER_CPU_WORKER_H
+#ifndef HAMMER_GPU_WORKER_H
+#define HAMMER_GPU_WORKER_H
 
 #include "hammer_batch.h"
+#include "../../libgpucrypto/crypto_context.h"
 
 typedef struct hammer_gpu_worker_s {
 	hammer_batch_buf_t **buf_set_A; /* All the buf_A in each CPU's batch */

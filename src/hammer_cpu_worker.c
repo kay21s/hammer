@@ -31,11 +31,13 @@ void *hammer_epoll_start(int efd, hammer_epoll_handlers_t *handler, int max_even
 
 	while (1) {
 
-		/* Each time, we first check if GPU has gave any indication for 
-		   1) which buffer is taken,
-		   2) which buffer has been processed */
-		if (hammer_batch_if_gpu_processed_new(batch)) {
-			hammer_batch_forwarding(batch);
+		if (config->gpu) {
+			/* Each time, we first check if GPU has gave any indication for 
+			   1) which buffer is taken,
+			   2) which buffer has been processed */
+			if (hammer_batch_if_gpu_processed_new(batch)) {
+				hammer_batch_forwarding(batch);
+			}
 		}
 
 		//FIXME: maybe problems in pointer &events
@@ -103,13 +105,34 @@ void *hammer_cpu_worker_loop(void *context)
 		exit(0);
 	}
 
-	handler = hammer_epoll_set_handlers((void *) hammer_handler_batch_read,
-			(void *) hammer_handler_ssl_read,
-			(void *) hammer_handler_write, 
-			(void *) hammer_handler_write, // write directly, we have already encrypted the message
-			(void *) hammer_handler_error,
-			(void *) hammer_handler_close,
-			(void *) hammer_handler_close);
+	if (config->gpu) {
+		assert(config->ssl); /* GPU must be used to accelerate ssl*/
+		handler = hammer_epoll_set_handlers((void *) hammer_handler_batch_read,
+						    (void *) hammer_handler_ssl_read,
+						    (void *) hammer_handler_write, 
+						    (void *) hammer_handler_write, // write directly, we have already encrypted the message
+						    (void *) hammer_handler_error,
+						    (void *) hammer_handler_close,
+						    (void *) hammer_handler_close);
+	else if (config->ssl) {
+		/* This is a ssl proxy, without gpu acceleration */
+		handler = hammer_epoll_set_handlers((void *) hammer_handler_read,
+						    (void *) hammer_handler_ssl_read,
+						    (void *) hammer_handler_write, 
+						    (void *) hammer_handler_ssl_write,
+						    (void *) hammer_handler_error,
+						    (void *) hammer_handler_close,
+						    (void *) hammer_handler_close);
+	} else {
+		/* This is just used for forwarding */
+		handler = hammer_epoll_set_handlers((void *) hammer_handler_read,
+						    (void *) hammer_handler_read,
+						    (void *) hammer_handler_write, 
+						    (void *) hammer_handler_write,
+						    (void *) hammer_handler_error,
+						    (void *) hammer_handler_close,
+						    (void *) hammer_handler_close);
+	}
 
 	/* Export known scheduler node to context thread */
 	pthread_setspecific(worker_sched_struct, (void *)sched);
@@ -120,9 +143,11 @@ void *hammer_cpu_worker_loop(void *context)
 	__builtin_prefetch(batch);
 	__builtin_prefetch(&worker_batch_struct);
 
-	/* Allocate the batch buffers, each cpu worker has a set of buffers,
-	 * two as input buffer, and two as output buffer. */
-	hammer_batch_init();
+	if (config->gpu) {
+		/* Allocate the batch buffers, each cpu worker has a set of buffers,
+		 * two as input buffer, and two as output buffer. */
+		hammer_batch_init();
+	}
 
 	/* Notify the dispatcher and the GPU worker that this thread has been created */
 	pthread_mutex_lock(&mutex_worker_init);

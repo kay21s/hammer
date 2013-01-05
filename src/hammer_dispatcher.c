@@ -33,7 +33,7 @@ int hammer_dispatcher_loop(int server_fd)
 			hammer_err("no worker available\n");
 			exit(0);
 		}
-		sched = &(sched_list[worker_id]);
+		sched = &(sched_set[worker_id]);
 
 		/* Assign connection to worker thread */
 		hammer_sched_add_connection(c, sched, NULL);
@@ -52,12 +52,12 @@ int hammer_dispatcher()
 		ready = 0;
 
 		pthread_mutex_lock(&mutex_worker_init);
-		for (i = 0; i < config->cpu_worker_num + config->gpu_worker_num; i++) {
-			if (sched_list[i].initialized)	ready++;
+		for (i = 0; i < config->worker_num; i++) {
+			if (sched_set[i].initialized)	ready++;
 		}
 		pthread_mutex_unlock(&mutex_worker_init);
 
-		if (ready == config->cpu_worker_num + config->gpu_worker_num) break;
+		if (ready == config->worker_num) break;
 		usleep(10000);
 	}
 

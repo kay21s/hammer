@@ -3,22 +3,28 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
+#include <assert.h>
+#include <pthread.h>
 
-#include "hammer_connection.h"
+#include "hammer_sched.h"
+#include "hammer_batch.h"
+#include "hammer_socket.h"
+#include "hammer_config.h"
+#include "hammer_memory.h"
+#include "hammer_macros.h"
 #include "hammer_sched.h"
 #include "hammer_epoll.h"
-#include "hammer_config.h"
-#include "hammer_socket.h"
-#include "hammer_list.h"
-#include "hammer_macros.h"
-#include "hammer_batch.h"
 #include "hammer.h"
+#include "crypto_size.h"
 
-pthread_key_t worker_batch_struct;
+//pthread_key_t worker_batch_struct;
+extern hammer_config_t *config;
 
 int hammer_batch_init()
 {
+	int res;
 	uint32_t alloc_size = config->batch_buf_max_size +
 		config->batch_job_max_num * AES_KEY_SIZE +
 		config->batch_job_max_num * AES_IV_SIZE +
@@ -28,9 +34,9 @@ int hammer_batch_init()
 
 	hammer_batch_t *batch = hammer_sched_get_batch_struct();
 	
-	batch->buf_A.output_buf = cuda_pinned_mem_alloc(config->batch_max_buf_size);
-	batch->buf_A.intput_buf = cuda_pinned_mem_alloc(alloc_size);
-	batch->buf_A.aes_keys_pos = config->batch_buf_size;
+	batch->buf_A.output_buf = cuda_pinned_mem_alloc(config->batch_buf_max_size);
+	batch->buf_A.input_buf = cuda_pinned_mem_alloc(alloc_size);
+	batch->buf_A.aes_keys_pos = config->batch_buf_max_size;
 	batch->buf_A.ivs_pos = batch->buf_A.aes_keys_pos + config->batch_job_max_num * AES_KEY_SIZE;
 	batch->buf_A.pkt_offsets_pos = batch->buf_A.ivs_pos + config->batch_job_max_num * AES_IV_SIZE;
 	batch->buf_A.length_pos = batch->buf_A.pkt_offsets_pos + config->batch_job_max_num * PKT_OFFSET_SIZE;
@@ -41,9 +47,9 @@ int hammer_batch_init()
 	batch->buf_A.buf_length = 0;
 	batch->buf_A.job_num = 0;
 
-	batch->buf_B.output_buf = cuda_pinned_mem_alloc(config->batch_max_buf_size);
+	batch->buf_B.output_buf = cuda_pinned_mem_alloc(config->batch_buf_max_size);
 	batch->buf_B.input_buf = cuda_pinned_mem_alloc(alloc_size);
-	batch->buf_B.aes_keys_pos = config->batch_buf_size;
+	batch->buf_B.aes_keys_pos = config->batch_buf_max_size;
 	batch->buf_B.ivs_pos = batch->buf_B.aes_keys_pos + config->batch_job_max_num * AES_KEY_SIZE;
 	batch->buf_B.pkt_offsets_pos = batch->buf_B.ivs_pos + config->batch_job_max_num * AES_IV_SIZE;
 	batch->buf_B.length_pos = batch->buf_B.pkt_offsets_pos + config->batch_job_max_num * PKT_OFFSET_SIZE;
@@ -60,13 +66,13 @@ int hammer_batch_init()
 	batch->processed_buf_id = -1;
 	batch->buf_has_been_taken = -1;
 	
-	res = pthread_mutex_init(&(batch->mutex_batch_complete, NULL));
+	res = pthread_mutex_init(&(batch->mutex_batch_complete), NULL);
 	if (res != 0) {
 		perror("Mutex initialization failed");
 		exit(EXIT_FAILURE);
 	}
 
-	res = pthread_mutex_init(&(batch->mutex_batch_launch, NULL));
+	res = pthread_mutex_init(&(batch->mutex_batch_launch), NULL);
 	if (res != 0) {
 		perror("Mutex initialization failed");
 		exit(EXIT_FAILURE);
@@ -90,7 +96,8 @@ uint64_t swap64(uint64_t v)
 int hammer_batch_job_add(hammer_batch_t *batch, hammer_connection_t *c, int length)
 {
 	int pad_length, job_num = batch->cur_buf->job_num;
-	hammer_job_t *new_job = &(batch->cur_buf->job_list[i]);
+	hammer_job_t *new_job = &(batch->cur_buf->job_list[job_num]);
+	hammer_batch_buf_t *buf;
 	void *base;
 
 	new_job->job_body_ptr = batch->cur_buf->output_buf + batch->cur_buf->buf_length;
@@ -106,7 +113,7 @@ int hammer_batch_job_add(hammer_batch_t *batch, hammer_connection_t *c, int leng
 	 *    4.2) Break the 64-bit length into 2 words (32 bits each).
 	 *         The low-order word is appended first and followed by the high-order word.
 	 *--------------------------------------------------------
-	     data   |100000000000000000000000000000000Length|
+	 *    data   |100000000000000000000000000000000Length|
 	 *--------------------------------------------------------
 	 */
 	pad_length = (length + 63 + 9) & (~0x3F);
@@ -130,20 +137,21 @@ int hammer_batch_job_add(hammer_batch_t *batch, hammer_connection_t *c, int leng
 	 */
 	hammer_list_add(&(new_job->_head), c->job_list);
 
+	buf = batch->cur_buf;
 	/* Add aes_key to the input buffer */
-	base = batch->input_buf + aes_keys_pos;
+	base = buf->input_buf + buf->aes_keys_pos;
 	memcpy(base + AES_KEY_SIZE * job_num, c->aes_key, AES_KEY_SIZE);
 	/* iv */
-	base = batch->input_buf + ivs_pos;
+	base = buf->input_buf + buf->ivs_pos;
 	memcpy(base + AES_IV_SIZE * job_num, c->iv, AES_IV_SIZE);
 	/* pkt_offset */
-	base = batch->input_buf + pkt_offset_pos;
+	base = buf->input_buf + buf->pkt_offsets_pos;
 	((uint32_t *)base)[job_num] = batch->cur_buf->buf_length;
 	/* length */
-	base = batch->input_buf + length_pos;
+	base = buf->input_buf + buf->length_pos;
 	((uint16_t *)base)[job_num] = length;
 	/* hmac key */
-	base = batch->input_buf + hmac_keys_pos;
+	base = buf->input_buf + buf->hmac_keys_pos;
 	memcpy(base + HMAC_KEY_SIZE * job_num, c->hmac_key, HMAC_KEY_SIZE);
 
 	/* Update batch parameters */
@@ -167,9 +175,7 @@ int hammer_batch_job_add(hammer_batch_t *batch, hammer_connection_t *c, int leng
 */
 int hammer_batch_handler_read(hammer_connection_t *c)
 {
-	int recv_len, available, if_gpu_fetched;
-	hammer_connection_t *rc;
-	hammer_sched_t *sched = hammer_sched_get_sched_struct();
+	int recv_len, available;
 	hammer_batch_t *batch = hammer_sched_get_batch_struct();
 
 //			hammer_epoll_state_set(sched->epoll_fd, socket,
