@@ -1,27 +1,16 @@
-CC = gcc
+#
+# Makefile for hammer.
+#
+# Kay <kay21s AT gmail DOT com>
 
-CFLAGS = -Wall -g
-LIBS = -lpthread
-
-INCLUDE_DIR = ./include
-OBJS_DIR = ./objs
-
-vpath % objs
-
-TARGET = hammer
-SOURCES = $(wildcard *.c)
-#OBJS = $(pathsubst %.c, $(OBJS_DIR)/%.o, $(SOURCES))
-OBJS = hammer.o hammer_sched.o hammer_connection.o hammer_dispatcher.o hammer_cpu_worker.o \
-	hammer_socket.o hammer_epoll.o hammer_memory.o hammer_handler.o
-
-%.o: %.c
-	$(CC) $(CFLAGS) -I $(INCLUDE_DIR) -c $< -o $@
-#	$(CC) $(CFLAGS) -I $(INCLUDE_DIR) -c $< -o $@
-
-#OBJS = $(OBJS_DIR)/$(patsubst %.c,%.o,$(patsubst %.cpp,%.o,$(SOURCES)))
-
-$(TARGET) : $(OBJS)
-	$(CC) $(OBJS) -o $(TARGET) $(LIBS)
-
+all: static 
+static:
+	cd src ; $(MAKE) $(AM_MAKEFLAGS) $@
+	cd libgpucrypto; $(MAKE) $(AM_MAKEFLAGS) $@
+	cd openssl-1.0.1c; $(MAKE) $(AM_MAKEFLAGS) $@
 clean:
-	rm -rf *.o  hammer
+	cd src ; $(MAKE) $(AM_MAKEFLAGS) $@
+	cd libgpucrypto; $(MAKE) $(AM_MAKEFLAGS) $@
+	cd openssl-1.0.1c; $(MAKE) $(AM_MAKEFLAGS) $@
+
+#EOF

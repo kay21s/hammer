@@ -1,6 +1,6 @@
 #modify directory configuration below to match your configuration \
  if you want use system default openssl-dev installation then comment out the OPENSSL_DIR line
-OPENSSL_DIR = /usr/local/ssl
+OPENSSL_DIR = ../openssl-1.0.1c
 CUDA_TOOLKIT_DIR = /usr/local/cuda
 CUDA_SDK_DIR = /home/$(USER)/NVIDIA_GPU_Computing_SDK
 
@@ -12,7 +12,7 @@ endif
 OPENSSL_LIB = -lcrypto
 
 #generic config
-CC = g++
+CC = gcc
 CFLAGS = -O2 -g -Wall
 INC = $(OPENSSL_INCDIR)
 
