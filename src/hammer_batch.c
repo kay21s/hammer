@@ -189,19 +189,14 @@ int hammer_batch_handler_read(hammer_connection_t *c)
 		exit(0);
 	}
 
-	///////////////////////////////////////////////////////////
-	pthread_mutex_lock(&(batch->mutex_batch_complete));
 	/* If GPU worker has processed the data */
 	if (batch->processed_buf_id != -1) {
 		hammer_batch_forwarding(batch);
 	}
-	pthread_mutex_unlock(&(batch->mutex_batch_complete));
-
 
 	/* Lock, we do not permit GPU worker to enter */
 	///////////////////////////////////////////////////////////
 	pthread_mutex_lock(&(batch->mutex_batch_launch));
-
 
 	/* If GPU worker has fetched the data,
 	 * we will switch our buffer, a two-buffer strategy. */ 
@@ -231,7 +226,6 @@ int hammer_batch_handler_read(hammer_connection_t *c)
 			printf("read unencrypted, Hey!!!\n");
 			return -1;
 		//}
-
 	}
 	/* Batch this job */
 	hammer_batch_job_add(batch, c, recv_len);
@@ -279,7 +273,9 @@ int hammer_batch_forwarding(hammer_batch_t *batch)
 	}
 
 	/* Mark this event has been processed */
+	//pthread_mutex_lock(&(batch->mutex_batch_complete));
 	batch->processed_buf_id = -1;
+	//pthread_mutex_unlock(&(batch->mutex_batch_complete));
 
 	return 0;
 }

@@ -50,45 +50,6 @@ int hammer_sched_want_no_conn(hammer_sched_t *sched)
 	return 0;
 }
 
-// simple dispatching algorithm
-int hammer_sched_next_worker_id()
-{
-	static int id = -1;
-	int i, pre_id;
-	
-	hammer_sched_t *sched;
-
-	pre_id = id;
-	id = -1;
-
-	for (i = pre_id + 1; i < config->workers; i ++) {
-		sched = &(sched_set[i]);
-		if (sched->if_want_new == HAMMER_SCHED_WANT_NEW) {
-			id = i;
-			break;
-		}
-	}
-
-	if (id == -1) {
-		/* not find any available worker in previous search */
-		for (i = 0; i <= pre_id; i ++) {
-			sched = &(sched_set[i]);
-			if (sched->if_want_new == HAMMER_SCHED_WANT_NEW) {
-				id = i;
-				break;
-			}
-
-		}
-	}
-
-	/* no available worker =( */
-	if (id == -1) {
-		printf("No available worker!!!\n");
-	}
-
-	return id;
-}
-
 void hammer_sched_add_connection(hammer_connection_t *c, hammer_sched_t *sched, hammer_connection_t *rc)
 {
 	int ret;
