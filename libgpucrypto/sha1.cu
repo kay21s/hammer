@@ -1153,7 +1153,7 @@ __global__ void computeHMAC_SHA1(char* buf, char* keys,  uint32_t *offsets, uint
 		*(out+3) = swap(h.h4);
 		*(out+4) = swap(h.h5);
 	}
-        __syncthreads();
+	__syncthreads();
 
 	if (threadIdx.x == 0)
 		*(checkbits + blockIdx.x) = 1;

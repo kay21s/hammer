@@ -82,7 +82,7 @@ void crypto_context_sha1_aes_encrypt(crypto_context_t *cry_ctx,
 
 	/* Call cbc kernel function to do encryption */
 	if (device_context_use_stream(dev_ctx)) {
-		HMAC_AES_together_gpu(  in_d,
+		co_sha1_aes_gpu(  in_d,
 					cry_ctx->streams[stream_id].output_d,
 					keys_d,
 					ivs_d,
@@ -94,7 +94,7 @@ void crypto_context_sha1_aes_encrypt(crypto_context_t *cry_ctx,
 					threads_per_blk,
 					device_context_get_stream(dev_ctx, stream_id));
 	} else {
-		HMAC_AES_together_gpu(  in_d,
+		co_sha1_aes_gpu(  in_d,
 					cry_ctx->streams[stream_id].output_d,
 					keys_d,
 					ivs_d,
