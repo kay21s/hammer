@@ -105,7 +105,7 @@ void hammer_gpu_worker_init(hammer_gpu_worker_t *g, hammer_batch_t *batch_set, h
 		config->batch_job_max_num * AES_KEY_SIZE +
 		config->batch_job_max_num * AES_IV_SIZE +
 		config->batch_job_max_num * PKT_OFFSET_SIZE + // input buffer
-		config->batch_job_max_num * LENGTH_SIZE +
+		config->batch_job_max_num * PKT_LENGTH_SIZE +
 		config->batch_job_max_num * HMAC_KEY_SIZE;
 	uint32_t output_size = config->batch_buf_max_size;
 
