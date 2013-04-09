@@ -22,24 +22,27 @@ int hammer_handler_connect(hammer_connection_t *c)
 	hammer_sched_t *sched = hammer_sched_get_sched_struct();
 	hammer_connection_t *new_c;
 
-	socket = hammer_socket_create();
+	/* Get a connection and associate with the epoll event */
+	new_c = hammer_get_connection();
+	hammer_init_connection(new_c);
+
+	new_c->socket = hammer_socket_create();
+	new_c->type = HAMMER_CONN_RAW;
+	new_c->rc = c;
+	c->rc = new_c;
 
 	address.sin_family = AF_INET;
 	address.sin_addr.s_addr = inet_addr(config->server_ip);
 	address.sin_port = htons(config->server_port);
 
-	ret = hammer_socket_connect(socket,(struct sockaddr *)&address, (socklen_t)sizeof(address));
+	ret = hammer_socket_connect(new_c->socket, (struct sockaddr *)&address, (socklen_t)sizeof(address));
 	if (ret != 0) {
 		printf("connect error\n");
 		return -1;
 	}
 
-	/* Get a connection and associate with the epoll event */
-	new_c = hammer_get_connection();
-	hammer_init_connection(new_c);
-
 	/* Assign socket to worker thread */
-	hammer_sched_add_connection(new_c, sched, c);
+	hammer_sched_add_connection(new_c, sched, HAMMER_CONN_CONNECTED);
 
 	return 0;
 }
@@ -91,6 +94,7 @@ hammer_connection_t *hammer_handler_accept(int server_socket)
 	c = hammer_get_connection();
 	hammer_init_connection(c);
 
+#if defined(SSL)
 	if (config->ssl) {
 		/* Accepted connection must be a SSL connection from client */
 		c->ssl = 1;
@@ -102,6 +106,7 @@ hammer_connection_t *hammer_handler_accept(int server_socket)
 		/* Get Parameters AES key, iv, hmac key, rounds */
 		hammer_openssl_get_parameters(c);
 	}
+#endif
 
 	return c;
 }
@@ -127,19 +132,17 @@ int hammer_handler_close(hammer_connection_t *c)
 int hammer_handler_write(hammer_connection_t *c)
 {
 	int send;
-	hammer_connection_t *rc;
 
 	hammer_job_t *this_job;
 	struct hammer_list *job_list, *job_head;
 
-	if (c->ssl) {
-		hammer_err("What's up, this should not be a ssl connection\n");
+	if (c->type != HAMMER_CONN_RAW) {
+		hammer_err("What's up, this should not be a rtsp connection\n");
 		exit(0);
 	}
-	// this is the socket to write to, now we get the socket that has read something
-	rc = c->r_conn;
 
-	job_list = rc->job_list;
+	// c->rc, this is the socket to write to, now we get the socket that has read something
+	job_list = c->rc->job_list;
 	hammer_list_foreach(job_head, job_list) {
 		this_job = hammer_list_entry(job_head, hammer_job_t, _head);
 
@@ -159,11 +162,77 @@ int hammer_handler_write(hammer_connection_t *c)
 	return 0;
 }
 
+/* This read data from clients */
+int hammer_handler_read(hammer_connection_t *c)
+{
+	int recv, available;
+	hammer_sched_t *sched = hammer_sched_get_sched_struct();
+
+//			hammer_epoll_state_set(sched->epoll_fd, socket,
+//					HAMMER_EPOLL_READ,
+//					HAMMER_EPOLL_LEVEL_TRIGGERED,
+//					(EPOLLERR | EPOLLHUP | EPOLLRDHUP | EPOLLIN));
+
+	available = c->body_size - c->body_length;
+	if (available <= 0) {
+		printf("small available buffer!\n");
+		exit(0);
+	}
+
+	/* Read incomming data */
+	if (c->type != HAMMER_CONN_RTSP) { 
+		hammer_err("What's up, this should be a rtsp connection\n");
+		exit(0)
+	}
+
+	recv = hammer_socket_read(
+			c->socket,
+			c->body_ptr + c->body_length,
+			available);
+	if (recv <= 0) {
+		// FIXME
+		//if (errno == EAGAIN) {
+		//	return 1;
+		//} else {
+			//hammer_session_remove(socket);
+			printf("Hey!!!\n");
+			return -1;
+		//}
+
+	} else if (recv > 0) {
+		hammer_conn_job_add(c, recv);
+		
+		if (c->body_length + 1 >= c->body_size) {
+			//hammer_session_remove(socket);
+			printf("buffer full\n");
+			return -1;
+		}
+
+		// activate the other socket to be write to
+		if (c->r_conn == NULL) {
+			// the connection has not been established, now we connect it
+			hammer_handler_connect(c);
+		}
+
+		/* if we read packets from clients, we will forward it to server directly
+		   which needs no batch operations. When GPU batch is needed, we will not  
+		   forward packets received from server to client directly */
+		if (config->gpu == 0) {
+			hammer_epoll_change_mode(sched->epoll_fd,
+					c->rc->socket,
+					HAMMER_EPOLL_WRITE,
+					HAMMER_EPOLL_LEVEL_TRIGGERED);
+		}
+	}
+
+	return recv;
+}
+
+#if 0
 /* read from clients, the SSL connection */
 int hammer_handler_ssl_read(hammer_connection_t *c)
 {
 	int recv, available;
-	hammer_connection_t *rc;
 	hammer_sched_t *sched = hammer_sched_get_sched_struct();
 
 //			hammer_epoll_state_set(sched->epoll_fd, socket,
@@ -211,14 +280,13 @@ int hammer_handler_ssl_read(hammer_connection_t *c)
 			// the connection has not been established, now we connect it
 			hammer_handler_connect(c);
 		}
-		rc= c->r_conn;
 
 		/* if we read packets from clients, we will forward it to server directly
 		   which needs no batch operations. When GPU batch is needed, we will not  
 		   forward packets received from server to client directly */
 		if (config->gpu == 0) {
 			hammer_epoll_change_mode(sched->epoll_fd,
-					rc->socket,
+					c->rc->socket,
 					HAMMER_EPOLL_WRITE,
 					HAMMER_EPOLL_LEVEL_TRIGGERED);
 		}
@@ -231,7 +299,6 @@ int hammer_handler_ssl_read(hammer_connection_t *c)
 int hammer_handler_ssl_write(hammer_connection_t *c)
 {
 	int send;
-	hammer_connection_t *rc;
 
 	hammer_job_t *this_job;
 	struct hammer_list *job_list, *job_head;
@@ -240,10 +307,9 @@ int hammer_handler_ssl_write(hammer_connection_t *c)
 		hammer_err("What's up, this should be a ssl connection\n");
 		exit(0);
 	}
-	// this is the socket to write to, now we get the socket that has read something
-	rc = c->r_conn;
 
-	job_list = rc->job_list;
+	// c->rc, this is the socket to write to, now we get the socket that has read something
+	job_list = c->rc->job_list;
 	hammer_list_foreach(job_head, job_list) {
 		this_job = hammer_list_entry(job_head, hammer_job_t, _head);
 
@@ -262,71 +328,5 @@ int hammer_handler_ssl_write(hammer_connection_t *c)
 
 	return 0;
 }
+#endif
 
-/* This is not used in real scenario */
-int hammer_handler_read(hammer_connection_t *c)
-{
-	int recv, available;
-	hammer_connection_t *rc;
-	hammer_sched_t *sched = hammer_sched_get_sched_struct();
-
-//			hammer_epoll_state_set(sched->epoll_fd, socket,
-//					HAMMER_EPOLL_READ,
-//					HAMMER_EPOLL_LEVEL_TRIGGERED,
-//					(EPOLLERR | EPOLLHUP | EPOLLRDHUP | EPOLLIN));
-
-	available = c->body_size - c->body_length;
-	if (available <= 0) {
-		printf("small available buffer!\n");
-		exit(0);
-	}
-
-	/* Read incomming data */
-	if (!(c->ssl)) {
-		hammer_err("What's up, this should be a ssl connection\n");
-		exit(0)
-	}
-
-	recv = hammer_socket_read(
-			c->socket,
-			c->body_ptr + c->body_length,
-			available);
-	if (recv <= 0) {
-		// FIXME
-		//if (errno == EAGAIN) {
-		//	return 1;
-		//} else {
-			//hammer_session_remove(socket);
-			printf("Hey!!!\n");
-			return -1;
-		//}
-
-	} else if (recv > 0) {
-		hammer_conn_job_add(c, recv);
-		
-		if (c->body_length + 1 >= c->body_size) {
-			//hammer_session_remove(socket);
-			printf("buffer full\n");
-			return -1;
-		}
-
-		// activate the other socket to be write to
-		if (c->r_conn == NULL) {
-			// the connection has not been established, now we connect it
-			hammer_handler_connect(c);
-		}
-		rc= c->r_conn;
-
-		/* if we read packets from clients, we will forward it to server directly
-		   which needs no batch operations. When GPU batch is needed, we will not  
-		   forward packets received from server to client directly */
-		if (config->gpu == 0) {
-			hammer_epoll_change_mode(sched->epoll_fd,
-					rc->socket,
-					HAMMER_EPOLL_WRITE,
-					HAMMER_EPOLL_LEVEL_TRIGGERED);
-		}
-	}
-
-	return recv;
-}

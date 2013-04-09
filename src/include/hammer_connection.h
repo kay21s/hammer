@@ -8,25 +8,31 @@
 #define HAMMER_EVENT_READ	0
 #define HAMMER_EVENT_WRITE	1
 
-#define HAMMER_SSL_ON		0
-#define HAMMER_SSL_OFF		1
+#define HAMMER_CONN_RAW		0
+#define HAMMER_CONN_SSL		1
+#define HAMMER_CONN_RTSP	2
+
+#define HAMMER_CONN_CONNECTED	3
+#define HAMMER_CONN_ACCEPTED	4
 
 typedef struct hammer_connection_s
 {
 	int socket;
-	int ssl; // if ssl is enabled
+	int type; // normal, ssl, or rtsp
 
 	// not use any more
 	// int body_length; // current length
 	// int body_size; // total size
 	// char *body_ptr;
 
-	struct hammer_connection_s *r_conn;
+	struct hammer_connection_s *rc; // its reverse direction connection
 	struct hammer_list *job_list;
 
+#if defined(SSL)
 	// SSL structs
 	SSL *ssl_handle;
 	SSL_CTX *ssl_context;
+#endif
 
 	char aes_key[AES_KEY_SIZE];
 	char iv[AES_IV_SIZE];

@@ -1,6 +1,6 @@
 Hammer 
 
-A real-time SSL reverse proxy accelerated by GPU.
+A real-time RTSP reverse proxy accelerated by GPU.
 
 Composition: 1 dispatcher + 1 GPU worker thread + several CPU worker threads
 

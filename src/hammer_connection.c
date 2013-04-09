@@ -25,7 +25,7 @@ int hammer_job_del(hammer_job_t *job)
 	hammer_sched_t *sched = hammer_sched_get_sched_struct();
 	libpool_free(job, JOB_SIZE, sched->thread_id);
 #endif
-	return 0
+	return 0;
 }
 
 int hammer_conn_job_add(hammer_connection_t *c, int length)
@@ -62,11 +62,11 @@ void hammer_conn_init()
 void hammer_init_connection(hammer_connection_t *c)
 {
 	c->socket = 0;
-	c->ssl = 0; // ssl not enabled by default
+	c->type = HAMMER_CONN_RAW;
 	c->body_ptr = hammer_mem_malloc(config->conn_buffer_size);
 	c->body_size = config->conn_buffer_size;
 	c->body_length = 0;
-	c->r_conn = NULL;
+	c->rc = NULL;
 	c->job_list = NULL;
 
 	return;

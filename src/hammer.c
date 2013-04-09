@@ -15,7 +15,7 @@
 
 /*
   |                            |                              |
-  |   hammer_handler_ssl_read  |                              |
+  |   hammer_handler_read      |                              |
   | ------------------------>  |                              |
   |                            |    hammer_handler_write      |
   |                            |  ------------------------>   |
@@ -29,7 +29,7 @@
   | <------------------------  |                              |
   |                            |                              |
   |                            |                              |
-Client        (SSL)          Proxy         (Socket)         Server
+Client        (SRTP)         Proxy         (RTP)         Server
 
 */
 
@@ -43,7 +43,8 @@ int hammer_config_init()
 
 	config = hammer_mem_calloc(sizeof(hammer_config_t));
 
-	config->ssl = 0; // if this is a ssl proxy
+	//config->ssl = 0; // if this is a ssl proxy
+	config->type = HAMMER_CONN_RTSP; // this is a rtsp proxy
 	config->gpu = 0; // if this need batch processing by GPU
 
 	config->cpu_worker_num = 1;
@@ -108,7 +109,7 @@ int hammer_init_sched_set()
 
 	sched_set = (hammer_sched_t *)hammer_mem_malloc(config->worker_num * sizeof(hammer_sched_t));
 	for (i = 0; i < config->worker_num; i ++) {
-		hammer_init_sched_node((hammer_sched_t *)&(sched_set[i]), -1, -1);
+		hammer_sched_node_init((hammer_sched_t *)&(sched_set[i]), -1, -1);
 	}
 
 	return 0;
@@ -154,7 +155,7 @@ int hammer_launch_cpu_workers()
 		/* pass a memory block to each worker */
 		context = (hammer_cpu_worker_context_t *)hammer_mem_malloc(sizeof(hammer_cpu_worker_context_t));
 		sched_node = &(sched_set[i]);
-		hammer_init_sched_node(sched_node, efd, i);
+		hammer_sched_node_init(sched_node, efd, i);
 		context->sched = sched_node;
 		context->batch = &(batch_set[i]);
 		context->core_id = config->core_ids[i];
@@ -165,7 +166,6 @@ int hammer_launch_cpu_workers()
 			printf("pthread_create error!!\n");
 			return -1;
 		}
-
 	}
 
 	return 0;
@@ -188,7 +188,7 @@ int hammer_launch_gpu_workers()
 		context->cpu_batch_set = batch_set;
 		context->core_id = config->core_ids[thread_id];
 		sched_node = &(sched_set[i]);
-		hammer_init_sched_node(sched_node, 0, thread_id);
+		hammer_sched_node_init(sched_node, 0, thread_id);
 		context->sched = sched_node;
 
 		pthread_attr_init(&attr);
@@ -205,9 +205,7 @@ int hammer_launch_gpu_workers()
 int main()
 {
 	hammer_init_config();
-
 	hammer_init_libpool();
-
 	hammer_init_sched_set();
 	hammer_init_batch_set();
 	//hammer_connection_init();

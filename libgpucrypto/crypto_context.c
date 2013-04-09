@@ -34,7 +34,7 @@ void crypto_context_init(cyrpto_context_t *cry_ctx, uint32_t input_size,
 	}*/
 }
 
-void crypto_context_sha1_aes_encrypt(crypto_context_t *cry_ctx,
+void crypto_context_aes_sha1_encrypt(crypto_context_t *cry_ctx,
 			const void	     *input_start,
 			void		     *output_start,
 			const unsigned long  in_pos,
@@ -73,16 +73,16 @@ void crypto_context_sha1_aes_encrypt(crypto_context_t *cry_ctx,
 
 	device_context_clear_checkbits(dev_ctx, stream_id, num_blks);
 
-	in_d         = (uint8_t *) input_d + in_pos;
-	aes_keys_d       = (uint8_t *) input_d + aes_keys_pos;
-	ivs_d        = (uint8_t *) input_d + ivs_pos;
-	hmac_keys_d = (uint8_t *)input_d + hmac_keys_pos;
-	pkt_offset_d = (uint32_t *) ((uint8_t *) input_d + pkt_offset_pos);
-	actual_length_d = (uint16_t *) ((uint8_t *) input_d + actual_length_pos);
+	in_d			= (uint8_t *) input_d + in_pos;
+	aes_keys_d		= (uint8_t *) input_d + aes_keys_pos;
+	ivs_d			= (uint8_t *) input_d + ivs_pos;
+	hmac_keys_d		= (uint8_t *) input_d + hmac_keys_pos;
+	pkt_offset_d	= (uint32_t *) ((uint8_t *) input_d + pkt_offset_pos);
+	actual_length_d	= (uint16_t *) ((uint8_t *) input_d + actual_length_pos);
 
 	/* Call cbc kernel function to do encryption */
 	if (device_context_use_stream(dev_ctx)) {
-		co_sha1_aes_gpu(in_d,
+		co_aes_sha1_gpu(in_d,
 					cry_ctx->streams[stream_id].output_d,
 					keys_d,
 					ivs_d,
@@ -94,7 +94,7 @@ void crypto_context_sha1_aes_encrypt(crypto_context_t *cry_ctx,
 					threads_per_blk,
 					device_context_get_stream(dev_ctx, stream_id));
 	} else {
-		co_sha1_aes_gpu(in_d,
+		co_aes_sha1_gpu(in_d,
 					cry_ctx->streams[stream_id].output_d,
 					keys_d,
 					ivs_d,
@@ -123,7 +123,7 @@ bool crypto_context_sync(cyrpto_context_t   *cry_ctx,
 			const bool          block,
 			const bool          copy_result)
 {
-        if (block) {
+	if (block) {
 		device_context_sync(stream_id, true);
 		if (copy_result && device_contex_get_state(dev_ctx, stream_id) == WAIT_KERNEL) {
 			cutilSafeCall(cudaMemcpyAsync(output_start,
@@ -166,7 +166,7 @@ bool crypto_context_sync(cyrpto_context_t   *cry_ctx,
 			assert(0);
 		}
 	}
-        return false;
+	return false;
 }
 
 void crypto_context_aes_cbc_encrypt(crypto_context_t *cry_ctx,

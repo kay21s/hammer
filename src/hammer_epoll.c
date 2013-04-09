@@ -44,7 +44,6 @@ int hammer_epoll_create(int max_events)
 
 	efd = epoll_create(max_events);
 	if (efd == -1) {
-		perror("epoll_create");
 		hammer_err("epoll_create() failed");
 	}
 

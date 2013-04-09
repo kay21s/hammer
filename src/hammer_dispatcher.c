@@ -74,7 +74,7 @@ int hammer_dispatcher_loop(int server_fd)
 		sched = &(sched_set[worker_id]);
 
 		/* Assign connection to worker thread */
-		hammer_sched_add_connection(c, sched, NULL);
+		hammer_sched_add_connection(c, sched, HAMMER_CONN_ACCEPTED);
 	}
 
 	return 0;

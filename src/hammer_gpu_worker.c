@@ -120,10 +120,11 @@ void hammer_gpu_worker_init(hammer_gpu_worker_t *g, hammer_batch_t *batch_set, h
 }
 
 /* created thread, all this calls are in the thread context */
-void *hammer_gpu_worker_loop(void *context)
+void *hammer_gpu_worker_loop(void *c)
 {
 	hammer_timer_t t, counter, loopcounter;
 	hammer_log_t log;
+	hammer_gpu_worker_context_t *context = c;
 	hammer_batch_t *batch_set = context->cpu_batch_set;
 	hammer_sched_t *sched_set = context->sched_set;
 	int ready, core_id = context->core_id;
@@ -215,7 +216,8 @@ void *hammer_gpu_worker_loop(void *context)
 		for (cuda_stream_id = 0; cuda_stream_id < config->cpu_worker_num; cuda_stream_id ++) {
 			buf_t = buf_set[cuda_stream_id];
 
-			crypto_context_sha1_aes_encrypt (
+			// FIXME:
+			crypto_context_aes_sha1_encrypt (
 				&cry_ctx,
 				buf_t->input_buf,
 				buf_t->output_buf,

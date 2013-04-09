@@ -78,7 +78,7 @@ __global__ void sha1_aes_kernel(
 		*(sha1_out+3) = swap(h.h4);
 		*(sha1_out+4) = swap(h.h5);
 	}
-        __syncthreads();
+	__syncthreads();
 
 /**************************************************************************
  SHA-1 Calculation completed, Now we start AES encryption

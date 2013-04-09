@@ -35,10 +35,10 @@ extern pthread_mutex_t mutex_worker_init;
 
 inline hammer_sched_t *hammer_sched_get_sched_struct();
 inline hammer_batch_t *hammer_sched_get_batch_struct();
-int hammer_init_sched_node(hammer_sched_t *sched, int epoll_fd, int thread_id);
+int hammer_sched_node_init(hammer_sched_t *sched, int epoll_fd, int thread_id);
 int hammer_sched_want_new_conn(hammer_sched_t *sched);
 int hammer_sched_want_no_conn(hammer_sched_t *sched);
-int hammer_sched_add_connection(hammer_connection_t *c, hammer_sched_t *sched, hammer_connection_t *rc);
+int hammer_sched_add_connection(hammer_connection_t *c, hammer_sched_t *sched, int ctype);
 int hammer_sched_del_connection(hammer_connection_t *c);
 
 #endif

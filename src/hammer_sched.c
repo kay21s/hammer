@@ -22,7 +22,7 @@ inline hammer_batch_t *hammer_sched_get_batch_struct()
     return pthread_getspecific(worker_batch_struct);
 }
 
-int hammer_init_sched_node(hammer_sched_t *sched, int epoll_fd, int thread_id)
+int hammer_sched_node_init(hammer_sched_t *sched, int epoll_fd, int thread_id)
 {
 	sched->epoll_fd = epoll_fd;
 	sched->epoll_max_events = config->epoll_max_events;
@@ -50,21 +50,18 @@ int hammer_sched_want_no_conn(hammer_sched_t *sched)
 	return 0;
 }
 
-void hammer_sched_add_connection(hammer_connection_t *c, hammer_sched_t *sched, hammer_connection_t *rc)
+void hammer_sched_add_connection(hammer_connection_t *c, hammer_sched_t *sched, int ctype)
 {
 	int ret;
 
 	ret = hammer_epoll_add(sched->epoll_fd, remote_fd, HAMMER_EPOLL_READ,
 			HAMMER_EPOLL_LEVEL_TRIGGERED, (void *)c);
 	if (hammer_likely(ret == 0)) {
-		if (r_conn != NULL) {
-			/* r_conn != NULL, this connection is added by connect(), to server */
-			c->r_conn = rc;
-			rc->r_conn = c;
-
+		if (ctype == HAMMER_CONN_CONNECTED) {
+			/* rc != NULL, this connection is added by connect(), to server */
 			sched->connected_connections ++;
-		} else {
-			/* r_conn == NULL, this connection is added by accept(), from client */
+		} else { /* HAMMER_CONN_ACCEPTED */
+			/* rc == NULL, this connection is added by accept(), from client */
 			sched->accepted_connections ++;
 		}
 	} else {
@@ -80,7 +77,6 @@ void hammer_sched_add_connection(hammer_connection_t *c, hammer_sched_t *sched, 
 // we delete both the two connections
 int hammer_sched_del_connection(hammer_connection_t *c)
 {
-	hammer_connection_t *rc= c->r_conn;
 	hammer_sched_t *sched = hammer_sched_get_sched_struct();
 
 	/* remove this connection */
@@ -89,9 +85,9 @@ int hammer_sched_del_connection(hammer_connection_t *c)
 	sched->closed_connections ++;
 
 	/* remove its corresponding connection */
-	if (rc != NULL) {
-		hammer_epoll_del(sched->epoll_fd, rc->socket);
-		hammer_close_connection(rc);
+	if (c->rc != NULL) {
+		hammer_epoll_del(sched->epoll_fd, c->rc->socket);
+		hammer_close_connection(c->rc);
 		sched->closed_connections ++;
 	}
 

@@ -29,31 +29,34 @@ int hammer_batch_init()
 		config->batch_job_max_num * AES_KEY_SIZE +
 		config->batch_job_max_num * AES_IV_SIZE +
 		config->batch_job_max_num * PKT_OFFSET_SIZE + // input buffer
-		config->batch_job_max_num * LENGTH_SIZE +
+		config->batch_job_max_num * PKT_LENGTH_SIZE +
 		config->batch_job_max_num * HMAC_KEY_SIZE;
 
 	hammer_batch_t *batch = hammer_sched_get_batch_struct();
 	
+	// Buf A
 	batch->buf_A.output_buf = cuda_pinned_mem_alloc(config->batch_buf_max_size);
 	batch->buf_A.input_buf = cuda_pinned_mem_alloc(alloc_size);
+
 	batch->buf_A.aes_keys_pos = config->batch_buf_max_size;
 	batch->buf_A.ivs_pos = batch->buf_A.aes_keys_pos + config->batch_job_max_num * AES_KEY_SIZE;
 	batch->buf_A.pkt_offsets_pos = batch->buf_A.ivs_pos + config->batch_job_max_num * AES_IV_SIZE;
 	batch->buf_A.length_pos = batch->buf_A.pkt_offsets_pos + config->batch_job_max_num * PKT_OFFSET_SIZE;
-	batch->buf_A.hmac_keys_pos = batch->buf_A.length_pos + config->batch_job_max_num * LENGTH_SIZE;
+	batch->buf_A.hmac_keys_pos = batch->buf_A.length_pos + config->batch_job_max_num * PKT_LENGTH_SIZE;
 
 	batch->buf_A.job_list = hammer_mem_malloc(config->batch_job_max_num * sizeof(hammer_job_t));
 	batch->buf_A.buf_size = config->batch_buf_max_size;
 	batch->buf_A.buf_length = 0;
 	batch->buf_A.job_num = 0;
 
+	// Buf B
 	batch->buf_B.output_buf = cuda_pinned_mem_alloc(config->batch_buf_max_size);
 	batch->buf_B.input_buf = cuda_pinned_mem_alloc(alloc_size);
 	batch->buf_B.aes_keys_pos = config->batch_buf_max_size;
 	batch->buf_B.ivs_pos = batch->buf_B.aes_keys_pos + config->batch_job_max_num * AES_KEY_SIZE;
 	batch->buf_B.pkt_offsets_pos = batch->buf_B.ivs_pos + config->batch_job_max_num * AES_IV_SIZE;
 	batch->buf_B.length_pos = batch->buf_B.pkt_offsets_pos + config->batch_job_max_num * PKT_OFFSET_SIZE;
-	batch->buf_B.hmac_keys_pos = batch->buf_B.length_pos + config->batch_job_max_num * LENGTH_SIZE;
+	batch->buf_B.hmac_keys_pos = batch->buf_B.length_pos + config->batch_job_max_num * PKT_LENGTH_SIZE;
 
 	batch->buf_B.job_list = hammer_mem_malloc(config->batch_job_max_num * sizeof(hammer_job_t));
 	batch->buf_B.buf_size = config->batch_buf_max_size;
@@ -83,14 +86,14 @@ int hammer_batch_init()
 
 uint64_t swap64(uint64_t v)
 {
-	return  ((v & 0x00000000000000ffU) << 56) |
-		((v & 0x000000000000ff00U) << 48) |
-		((v & 0x0000000000ff0000U) << 24) |
-		((v & 0x00000000ff000000U) << 8)  |
-		((v & 0x000000ff00000000U) >> 8)  |
-		((v & 0x0000ff0000000000U) >> 24) |
-		((v & 0x00ff000000000000U) >> 48) |
-		((v & 0xff00000000000000U) >> 56);
+	return	((v & 0x00000000000000ffU) << 56) |
+			((v & 0x000000000000ff00U) << 48) |
+			((v & 0x0000000000ff0000U) << 24) |
+			((v & 0x00000000ff000000U) << 8)  |
+			((v & 0x000000ff00000000U) >> 8)  |
+			((v & 0x0000ff0000000000U) >> 24) |
+			((v & 0x00ff000000000000U) >> 48) |
+			((v & 0xff00000000000000U) >> 56);
 }
 
 int hammer_batch_job_add(hammer_batch_t *batch, hammer_connection_t *c, int length)
@@ -100,14 +103,15 @@ int hammer_batch_job_add(hammer_batch_t *batch, hammer_connection_t *c, int leng
 	hammer_batch_buf_t *buf;
 	void *base;
 
+	/* Calculating the information for output buffer */
 	new_job->job_body_ptr = batch->cur_buf->output_buf + batch->cur_buf->buf_length;
 
 	/* Pad Sha-1
 	 * 1) data must be padded to 512 bits (64 bytes)
-	 * 2) Padding always begins with one-bit 1 first
+	 * 2) Padding always begins with one-bit 1 first (1 bytes)
 	 * 3) Then zero or more bits "0" are padded to bring the length of 
 	 *    the message up to 64 bits fewer than a multiple of 512.
-	 * 4) Appending Length. 64 bits are appended to the end of the padded 
+	 * 4) Appending Length (8 bytes). 64 bits are appended to the end of the padded 
 	 *    message to indicate the length of the original message in bytes
 	 *    4.1) the length of the message is stored in big-endian format
 	 *    4.2) Break the 64-bit length into 2 words (32 bits each).
@@ -117,7 +121,7 @@ int hammer_batch_job_add(hammer_batch_t *batch, hammer_connection_t *c, int leng
 	 *--------------------------------------------------------
 	 */
 	pad_length = (length + 63 + 9) & (~0x3F);
-	*(uint8_t *)(new_job->job_body_ptr + length) =  1 << 7;
+	*(uint8_t *)(new_job->job_body_ptr + length) = 1 << 7;
 	uint64_t len64 = swap64((uint64_t)length);
 	*(uint64_t *)(new_job->job_body_ptr + pad_length - 8) = len64;
 
@@ -133,17 +137,17 @@ int hammer_batch_job_add(hammer_batch_t *batch, hammer_connection_t *c, int leng
 	new_job->connection = c;
 
 	/* Add the job to the connection job list, so that it can be 
-	 * forwarded in hammer_handler_ssl_write
+	 * forwarded in hammer_handler_write
 	 */
 	hammer_list_add(&(new_job->_head), c->job_list);
 
 	buf = batch->cur_buf;
 	/* Add aes_key to the input buffer */
 	base = buf->input_buf + buf->aes_keys_pos;
-	memcpy(base + AES_KEY_SIZE * job_num, c->aes_key, AES_KEY_SIZE);
+	memcpy((uint8_t *)base + AES_KEY_SIZE * job_num, c->aes_key, AES_KEY_SIZE);
 	/* iv */
 	base = buf->input_buf + buf->ivs_pos;
-	memcpy(base + AES_IV_SIZE * job_num, c->iv, AES_IV_SIZE);
+	memcpy((uint8_t *)base + AES_IV_SIZE * job_num, c->iv, AES_IV_SIZE);
 	/* pkt_offset */
 	base = buf->input_buf + buf->pkt_offsets_pos;
 	((uint32_t *)base)[job_num] = batch->cur_buf->buf_length;
@@ -152,7 +156,18 @@ int hammer_batch_job_add(hammer_batch_t *batch, hammer_connection_t *c, int leng
 	((uint16_t *)base)[job_num] = length;
 	/* hmac key */
 	base = buf->input_buf + buf->hmac_keys_pos;
-	memcpy(base + HMAC_KEY_SIZE * job_num, c->hmac_key, HMAC_KEY_SIZE);
+	memcpy((uint8_t *)base + HMAC_KEY_SIZE * job_num, c->hmac_key, HMAC_KEY_SIZE);
+	/* Copy the RTSP header to its corresponding output buffer */
+
+	/* calculate pkt_header_length
+	  --- this is done in GPU ---
+	pkt_header_length = 
+
+	base = buf->output_buf;
+	memcpy((uint8_t *)base + batch->cur_buf->buf_length, 
+		(uint8_t *)(buf->input_buf) + batch->cur_buf->buf_length,
+		pkt_header_length);
+	*/
 
 	/* Update batch parameters */
 	batch->cur_buf->buf_length += pad_length;
@@ -183,9 +198,9 @@ int hammer_batch_handler_read(hammer_connection_t *c)
 //					HAMMER_EPOLL_LEVEL_TRIGGERED,
 //					(EPOLLERR | EPOLLHUP | EPOLLRDHUP | EPOLLIN));
 
-	/* we batch ssl encryption */
-	if (!c->ssl) {
-		hammer_err("this should be an ssl connection\n");
+	/* we batch encryption */
+	if (c->type != HAMMER_CONN_RAW) {
+		hammer_err("this should be a connection with server\n");
 		exit(0);
 	}
 
@@ -208,7 +223,7 @@ int hammer_batch_handler_read(hammer_connection_t *c)
 	
 	available = batch->cur_buf->buf_size - batch->cur_buf->buf_length;
 	if (available <= 0) {
-		printf("small available buffer!\n");
+		hammer_err("small available buffer!\n");
 		exit(0);
 	}
 
@@ -223,21 +238,21 @@ int hammer_batch_handler_read(hammer_connection_t *c)
 		//	return 1;
 		//} else {
 			//hammer_session_remove(socket);
-			printf("read unencrypted, Hey!!!\n");
-			return -1;
+			hammer_err("read unencrypted, Hey!!!\n");
+			exit(0);
 		//}
 	}
+
 	/* Batch this job */
 	hammer_batch_job_add(batch, c, recv_len);
-
 
 	/* Unlock, Now gpu worker has completed this read, GPU can launch this batch */
 	///////////////////////////////////////////////////////////
 	pthread_mutex_unlock(&(batch->mutex_batch_launch));
 
-	/* check its r_conn  */
-	if (c->r_conn == NULL) {
-		hammer_err("This r_conn is considered to be existed \n");
+	/* check its rc  */
+	if (c->rc == NULL) {
+		hammer_err("This rc is considered to be existed \n");
 		exit(0);
 	}
 
@@ -264,7 +279,7 @@ int hammer_batch_forwarding(hammer_batch_t *batch)
 	/* Set each connection to forward */
 	for (i = 0; i < buf->job_num; i ++) {
 		this_job = &(buf->job_list[i]);
-		rc = this_job->connection->r_conn;
+		rc = this_job->connection->rc;
 		
 		hammer_epoll_change_mode(sched->epoll_fd,
 				rc->socket,
@@ -272,7 +287,7 @@ int hammer_batch_forwarding(hammer_batch_t *batch)
 				HAMMER_EPOLL_LEVEL_TRIGGERED);
 	}
 
-	/* Mark this event has been processed */
+	/* Mark this event as processed */
 	//pthread_mutex_lock(&(batch->mutex_batch_complete));
 	batch->processed_buf_id = -1;
 	//pthread_mutex_unlock(&(batch->mutex_batch_complete));
