@@ -18,6 +18,8 @@
 #include "hammer_macros.h"
 #include "hammer_batch.h"
 
+extern hammer_config_t *config;
+
 void *hammer_epoll_start(int efd, hammer_epoll_handlers_t *handler, int max_events)
 {
 	int i, fd, ret = -1;

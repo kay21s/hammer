@@ -17,7 +17,6 @@ CFLAGS = -O2 -g -Wall
 INC = $(OPENSSL_INCDIR)
 
 #CUDA related config
-NVCC = nvcc
 NVCFLAGS= --ptxas-options=-v -O2 --use_fast_math
 NVINC = -I/usr/local/cuda/include -I$(CUDA_SDK_DIR)/C/common/inc
 

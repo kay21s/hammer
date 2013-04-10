@@ -2,6 +2,8 @@
 #define HAMMER_CONFIG_H
 
 typedef struct hammer_config_s {
+	unsigned int cpu_job_max_num;
+	unsigned int cpu_conn_max_num;
 	unsigned int cpu_worker_num;
 	unsigned int gpu_worker_num;
 	unsigned int worker_num; // cpu_worker_num + gpu_worker_num
@@ -24,6 +26,7 @@ typedef struct hammer_config_s {
 
 	// Most important argument for realtime scheduling algorithm
 	unsigned int I; // 40ms, 30ms ...
+	unsigned int type;
 
 	/* we currently not use these */
 	unsigned int aes_key_size;

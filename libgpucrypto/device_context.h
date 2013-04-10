@@ -9,10 +9,13 @@
 #define MAX_STREAM 16
 #define MAX_BLOCKS 8192
 
+#define true 1
+#define false 0
+
 /**
  * Enum for stream state
  **/
-enum STATE {
+enum state {
 	READY,
 	WAIT_KERNEL,
 	WAIT_COPY,
@@ -21,8 +24,8 @@ enum STATE {
 typedef struct stream_context_s {
 	cudaStream_t stream;
 
-	STATE state;
-	bool finished;
+	enum state state;
+	uint8_t finished;
 
 	uint8_t *checkbits;
 	uint8_t *checkbits_d;
@@ -32,8 +35,8 @@ typedef struct stream_context_s {
 	uint64_t end_usec;
 } stream_context_t;
 
-typedef device_context_s {
-	struct stream_context stream_ctx[MAX_STREAM + 1]; //stream_ctx 0 is for default stream
+typedef struct device_context_s {
+	stream_context_t stream_ctx[MAX_STREAM + 1]; //stream_ctx 0 is for default stream
 	unsigned int nstream;
 } device_context_t;
 
@@ -47,7 +50,7 @@ typedef device_context_s {
  *                For more information on how they differ, refer to CUDA manual.
  * @return true when succesful, false otherwise
  **/
-bool device_context_init(device_context_t *dc, const unsigned long size, const unsigned nstream);
+uint8_t device_context_init(device_context_t *dc, const unsigned nstream);
 
 /**
  * Check whether current operation has finished.
@@ -57,7 +60,7 @@ bool device_context_init(device_context_t *dc, const unsigned long size, const u
  * @param block Wait for current operation to finish. true by default
  * @return true if stream is idle, and false if data copy or execution is in progress
  **/
-bool device_context_sync(device_context_t *dc, const unsigned stream_id, const bool block);
+uint8_t device_context_sync(device_context_t *dc, const unsigned stream_id, const uint8_t block);
 
 /**
  * Set the state of the stream. States indicates what is the current operation on-going.
@@ -65,7 +68,7 @@ bool device_context_sync(device_context_t *dc, const unsigned stream_id, const b
  * @param stream_id Index of stream. If initilized to 0 stream then 0, otherwise from 1 to number of streams initialized.
  * @param state Describe the current state of stream. Currently there are three different states: READY, WAIT_KERNEL, WAIT_COPY.
  **/
-void device_context_set_state(device_context_t *dc, const unsigned stream_id, const STATE state);
+void device_context_set_state(device_context_t *dc, const unsigned stream_id, const enum state state);
 
 /**
  * retrieve the state of the stream
@@ -73,7 +76,7 @@ void device_context_set_state(device_context_t *dc, const unsigned stream_id, co
  * @param stream_id Index of stream. If initilized to 0 stream then 0, otherwise from 1 to number of streams initialized.
  * @return Current state of the stream
  **/
-enum STATE device_context_get_state(device_context_t *dc, const unsigned stream_id);
+enum state device_context_get_state(device_context_t *dc, const unsigned stream_id);
 
 /**
  * Retreive the buffer storing the kernel execution finish check bits.
@@ -115,7 +118,7 @@ cudaStream_t device_context_get_stream(device_context_t *dc, const unsigned stre
  *
  * @return
  */
-bool device_context_use_stream(device_context_t *dc);
+uint8_t device_context_use_stream(device_context_t *dc);
 
 
 /**
@@ -127,7 +130,7 @@ bool device_context_use_stream(device_context_t *dc);
  *
  * @return
  */
-uint64_t device_context_get_elapsed_time(device_context_t dc, const unsigned stream_id);
+uint64_t device_context_get_elapsed_time(device_context_t *dc, const unsigned stream_id);
 
 
 #endif /* DEVICE_CONTEXT_H */

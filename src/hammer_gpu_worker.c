@@ -17,6 +17,7 @@
 #include "hammer_config.h"
 #include "hammer_macros.h"
 #include "hammer_batch.h"
+#include "../libgpucrypto/crypto_context.h"
 
 /* Get the buffer of each CPU worker at each time interval I */
 void hammer_gpu_get_batch(hammer_gpu_worker_t *g, hammer_batch_buf_t *batch_set)

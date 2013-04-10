@@ -14,19 +14,24 @@ typedef struct crypto_context_s {
 	gpu_stream_t *streams;
 } crypto_context_t;
 
+
+
 /**
  * Constructior.
  *
  * @param dev_ctx Device context pointer.
  * Device context must be initialized before calling this function.
  */
-void crypto_context_init(crypto_context_t *cry_ctx, device_context_t *dev_ctx);
+void crypto_context_init(crypto_context_t *cry_ctx,
+						uint32_t input_size,
+						uint32_t output_size,
+						uint32_t stream_num);
 
 
 /**
  * WOW~ I combined aes and sha1 in the same kernel execution.
  */
-void crypto_context_sha1_aes_encrypt(crypto_context_t *cry_ctx,
+void crypto_context_aes_sha1_encrypt(crypto_context_t *cry_ctx,
 			const void	     *input_start,
 			void		     *output_start,
 			const unsigned long  in_pos,
@@ -68,7 +73,7 @@ void crypto_context_sha1_aes_encrypt(crypto_context_t *cry_ctx,
  * @param stream_id Stream index.
  * @param bits key length for AES cipher
  */
-void crypto_context_aes_cbc_encrypt(device_context  *dev_ctx,
+void crypto_context_aes_cbc_encrypt(crypto_context_t  *cry_ctx,
 			const void	     *memory_start,
 			const void	     *memory_d,
 			const unsigned long  in_pos,
@@ -127,9 +132,10 @@ void crypto_context_hmac_sha1(crypto_context_t *cry_ctx,
  * @return true if the current operation on the stream is finished
  * otherwise false.
  */
-bool crypto_context_sync(device_context      *dev_ctx,
+uint8_t crypto_context_sync(crypto_context_t   *cry_ctx,
 			const unsigned int  stream_id,
-			const bool          block,
-			const bool          copy_result);
+			void 		    *output_start,
+			const uint8_t          block,
+			const uint8_t          copy_result);
 
 #endif /*CRYPTO_CONTEXT_H*/

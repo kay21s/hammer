@@ -2,7 +2,7 @@
 #define HAMMER_CONNECTION_H
 
 #include "hammer_list.h"
-#include "openssl/ssl.h"
+//#include "openssl/ssl.h"
 #include "../../libgpucrypto/crypto_size.h"
 
 #define HAMMER_EVENT_READ	0
@@ -20,10 +20,10 @@ typedef struct hammer_connection_s
 	int socket;
 	int type; // normal, ssl, or rtsp
 
-	// not use any more
-	// int body_length; // current length
-	// int body_size; // total size
-	// char *body_ptr;
+	// FIXME:not use any more
+	int body_length; // current length
+	int body_size; // total size
+	char *body_ptr;
 
 	struct hammer_connection_s *rc; // its reverse direction connection
 	struct hammer_list *job_list;

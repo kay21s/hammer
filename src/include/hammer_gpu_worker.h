@@ -11,7 +11,7 @@ typedef struct hammer_gpu_worker_s {
 	hammer_batch_buf_t **cur_buf_set; /* either buf_set_A or buf_set_B */
 	int buf_set_id;
 
-	crypto_context cry_ctx;
+	crypto_context_t cry_ctx;
 	int total_bytes;
 } hammer_gpu_worker_t;
 

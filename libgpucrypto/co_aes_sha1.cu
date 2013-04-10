@@ -1,6 +1,5 @@
-#include "sha1.h"
 #include "aes_core.h"
-#include "aes_kernel.h"
+#include "sha1.h"
 
 #include <stdint.h>
 #include <assert.h>
@@ -8,15 +7,15 @@
 /* AES counter mode + HMAC SHA-1, 
    the encryption of each block in AES counter mode is not parallelized in this implementation */
 __global__ void aes_ctr_sha1_kernel(
-			const uint8_t	*input_buf,
-			uint8_t			*output_buf,
-			const uint8_t	*aes_keys,
-			uint8_t			*ivs,
-			const char		*hmac_keys,
-			const uint32_t	*pkt_offset,
-			const uint16_t  *length,
+			uint8_t	*input_buf,
+			uint8_t *output_buf,
+			const uint8_t *aes_keys,
+			uint8_t *ivs,
+			const char *hmac_keys,
+			const uint32_t *pkt_offset,
+			const uint16_t *length,
 			const unsigned int num_flows,
-			uint8_t			*checkbits=0)
+			uint8_t *checkbits=0)
 {
 /**************************************************************************
  AES Encryption is started first
@@ -26,6 +25,8 @@ __global__ void aes_ctr_sha1_kernel(
 	__shared__ uint32_t shared_Te2[256];
 	__shared__ uint32_t shared_Te3[256];
 	__shared__ uint32_t shared_Rcon[10];
+
+	int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
 	/* Private counter 128 bits */
 	uint64_t keystream[2];
@@ -62,18 +63,19 @@ __global__ void aes_ctr_sha1_kernel(
 	/* Skip RTP header to Locate the data to be encrypted */
 	uint8_t *in			= pkt_offset[idx] + input_buf;
 	uint8_t cc			= (in[0] & 0x80) >> 4; /* Get the number of CSRC identifiers */
-	uint32_t header_len = (uint32_t *)((uint8_t *)in + 96 + 32 * cc + 4); /* Get the optional header length */
+	uint32_t header_len = *(uint32_t *)((uint8_t *)in + 96 + 32 * cc + 4); /* Get the optional header length */
 	header_len			= 128 + 32 * cc + header_len; /* Get the total header length */
 
+	/* Jump to the parts need encryption */
+	in		= in + header_len; /* Get to the payload */
+	uint8_t *out	= pkt_offset[idx] + output_buf;
+
 	/* FIXME: optimization : copy the RTP header to output */
-	for (i = 0; i < header_len; i ++) {
+	for (unsigned i = 0; i < header_len; i ++) {
 		((char *)out)[i] = ((char *)in)[i];
 	}
 
-	/* Jump to the parts need encryption */
-	in					= in + header_len /* Get to the payload */
-	uint8_t *out		= pkt_offset[idx] + output_buf;
-	out					= out + header_len; /* Get to the payload */
+	out		= out + header_len; /* Get to the payload */
 	
 	/* data length that needs encryption */
 	len	-= header_len;
@@ -92,7 +94,7 @@ __global__ void aes_ctr_sha1_kernel(
 			iv[1] ++;
 
 		/* Get the keystream here */
-		AES_128_encrypt(iv, keystream, key,
+		AES_128_encrypt((uint8_t *)iv, (uint8_t *)keystream, key,
 				shared_Te0, shared_Te1, shared_Te2, shared_Te3, shared_Rcon);
 
 		*((uint64_t*)out)       = *((uint64_t*)in)       ^ *((uint64_t*)keystream);
@@ -109,7 +111,7 @@ __global__ void aes_ctr_sha1_kernel(
 		if (iv[0] == 0)
 			iv[1] ++;
 
-		AES_128_encrypt(iv, keystream, key,
+		AES_128_encrypt((uint8_t *)iv, (uint8_t *)keystream, key,
 				shared_Te0, shared_Te1, shared_Te2, shared_Te3, shared_Rcon);
 
 		for(unsigned n = 0; n < len; ++n)
@@ -123,15 +125,14 @@ __global__ void aes_ctr_sha1_kernel(
 ***************************************************************************/
 	uint32_t w_register[16];
 
-	int idx = blockIdx.x * blockDim.x + threadIdx.x;
 	if (idx < num_flows) {
 		uint32_t *w = w_register;
 		hash_digest_t h;
 		uint32_t offset = pkt_offset[idx];
-		unsigned long length = length[idx];
+		unsigned long len = length[idx];
 
-		uint16_t sha1_pad_len = (length + 63 + 9) & (~0x3F);
-		uint32_t *sha1_out = intput_buf + offset + sha1_pad_len;
+		uint16_t sha1_pad_len = (len + 63 + 9) & (~0x3F);
+		uint32_t *sha1_out = (uint32_t *)(input_buf + offset + sha1_pad_len);
 
 		for (unsigned i = 0; i < 16; i++)
 			w[i] = 0x36363636;
@@ -149,9 +150,9 @@ __global__ void aes_ctr_sha1_kernel(
 		computeSHA1Block((char*)w, w, 0, 64, h);
 
 		//SHA1 compute on message
-		unsigned num_iter = (length + 63 + 9) / 64;
+		unsigned num_iter = (len + 63 + 9) / 64;
 		for (unsigned i = 0; i < num_iter; i ++)
-			computeSHA1Block(input_buf + offset, w, i * 64, length, h);
+			computeSHA1Block((char *)(input_buf + offset), w, i * 64, len, h);
 
 		/* In SRTP, sha1_out has only 80 bits output 32+32+16 = 80 */
 		*(sha1_out)   = swap(h.h1);
@@ -197,7 +198,7 @@ __global__ void aes_ctr_sha1_kernel(
 
 
 void co_aes_sha1_gpu(
-			const uint8_t	*in,
+			uint8_t	*in,
 			uint8_t			*out,
 			const uint8_t	*aes_keys,
 			uint8_t			*ivs,
@@ -209,7 +210,7 @@ void co_aes_sha1_gpu(
 			unsigned		threads_per_blk,
 			cudaStream_t	stream)
 {
-	int num_blks = (N + threads_per_blk - 1) / threads_per_blk;
+	int num_blks = (num_flows + threads_per_blk - 1) / threads_per_blk;
 
 	if (stream == 0) {
 		aes_ctr_sha1_kernel<<<num_blks, threads_per_blk>>>(

@@ -16,10 +16,10 @@ void AES_cbc_128_encrypt_gpu(const uint8_t *in_d,
 			     const unsigned int numFlows,
 			     uint8_t *checkbits_d,
 			     const unsigned int threads_per_blk,
-			     cudaStream_t stream = 0);
+			     cudaStream_t stream);
 
 void hmac_sha1_gpu(char* buf, char* keys,  uint32_t *offsets, uint16_t *lengths,
 		   uint32_t *outputs, int N, uint8_t * checkbits,
-		   unsigned threads_per_blk, cudaStream_t stream=0);
+		   unsigned threads_per_blk, cudaStream_t stream);
 
 #endif /* CRYPTO_KERNEL_H */

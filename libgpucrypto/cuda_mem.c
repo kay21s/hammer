@@ -1,5 +1,6 @@
+#include <stdint.h>
 #include <cuda_runtime.h>
-#include <cutil_inline.h>
+//#include <cutil_inline.h>
 
 void *cuda_device_mem_alloc(unsigned long size)
 {

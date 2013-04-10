@@ -37,7 +37,7 @@ Client        (SRTP)         Proxy         (RTP)         Server
 hammer_config_t *config;
 hammer_batch_t *batch_set;
 
-int hammer_config_init()
+int hammer_init_config()
 {
 	int length, i;
 
@@ -123,12 +123,14 @@ int hammer_init_batch_set()
 
 int hammer_init_libpool()
 {
+	int i;
 	libpool_init();
 
 	for (i = 0; i < config->cpu_worker_num; i ++) {
-		libpool_init_size(JOB_SIZE, config->cpu_job_max_num, sizeof(hammer_job_t), i);
-		libpool_init_size(CONN_SIZE, config->cpu_conn_max_num, sizeof(hammer_connection_t), i);
+		libpool_init_size(SIZE_JOB, config->cpu_job_max_num, sizeof(hammer_job_t), i);
+		libpool_init_size(SIZE_CONN, config->cpu_conn_max_num, sizeof(hammer_connection_t), i);
 	}
+	return 0;
 }
 
 void hammer_init_thread_keys()

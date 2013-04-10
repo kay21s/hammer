@@ -9,6 +9,11 @@ ifneq ($(OPENSSL_DIR), )
 	OPENSSL_INCDIR = -I$(OPENSSL_DIR)/include
 endif
 
+################################################################
+CUDA_PATH       ?= /usr/local/cuda-5.0
+CUDA_INC_PATH   ?= $(CUDA_PATH)/include
+################################################################
+
 HEADER_DIR = ./include
 LIBCRYPTO_DIR = ../libgpucrypto
 OBJECT_DIR = objs
@@ -34,7 +39,7 @@ $(OBJECT_DIR):
 
 
 $(OBJECT_DIR)/%.o : %.c
-	$(CC) $(CFLAGS) -I $(INC) -I $(LIBCRYPTO_DIR) -c $< -o $@
+	$(CC) $(CFLAGS) -I $(INC) -I $(CUDA_INC_PATH) -I $(LIBCRYPTO_DIR) -c $< -o $@
 
 .PHONY : clean
 clean:

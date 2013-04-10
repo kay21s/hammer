@@ -7,13 +7,15 @@
 #include "hammer_socket.h"
 #include "libpool.h"
 
+extern hammer_config_t *config;
+
 hammer_job_t *hammer_job_get()
 {
 #if defined(HAMMER_MALLOC)
 	return (hammer_job_t *)hammer_mem_malloc(sizeof(hammer_job_t));
 #else
 	hammer_sched_t *sched = hammer_sched_get_sched_struct();
-	return (hammer_job_t *)libpool_alloc(JOB_SIZE, sched->thread_id);
+	return (hammer_job_t *)libpool_alloc(SIZE_JOB, sched->thread_id);
 #endif
 }
 
@@ -23,7 +25,7 @@ int hammer_job_del(hammer_job_t *job)
 	hammer_mem_free(job);
 #else
 	hammer_sched_t *sched = hammer_sched_get_sched_struct();
-	libpool_free(job, JOB_SIZE, sched->thread_id);
+	libpool_free(job, SIZE_JOB, sched->thread_id);
 #endif
 	return 0;
 }
@@ -78,7 +80,7 @@ hammer_connection_t *hammer_get_connection()
 	return hammer_mem_malloc(sizeof(hammer_connection_t));
 #else
 	hammer_sched_t *sched = hammer_sched_get_sched_struct();
-	return (hammer_connection_t *)libpool_alloc(CONN_SIZE, sched->thread_id);
+	return (hammer_connection_t *)libpool_alloc(SIZE_CONN, sched->thread_id);
 #endif
 }
 
@@ -88,7 +90,7 @@ void hammer_free_connection(hammer_connection_t *c)
 	hammer_mem_free(c);
 #else
 	hammer_sched_t *sched = hammer_sched_get_sched_struct();
-	libpool_free(c, CONN_SIZE, sched->thread_id);
+	libpool_free(c, SIZE_CONN, sched->thread_id);
 #endif
 	return;
 }
