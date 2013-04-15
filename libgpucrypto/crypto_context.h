@@ -31,20 +31,21 @@ void crypto_context_init(crypto_context_t *cry_ctx,
 /**
  * WOW~ I combined aes and sha1 in the same kernel execution.
  */
-void crypto_context_aes_sha1_encrypt(crypto_context_t *cry_ctx,
-			const void	     *input_start,
-			void		     *output_start,
-			const unsigned long  in_pos,
-			const unsigned long  aes_keys_pos,
-			const unsigned long  ivs_pos,
-			const unsigned long  hmac_keys_pos,
-			const unsigned long  pkt_offset_pos,
-			const unsigned long  actual_length_pos,
-			const unsigned long  tot_in_len,
-			const unsigned long  tot_out_len,
-			const unsigned long  num_flows,
-			const unsigned int   stream_id,
-			const unsigned int   bits);
+void crypto_context_aes_sha1_encrypt(
+			crypto_context_t *cry_ctx,
+			void			*input_start,
+			void			*output_start,
+			unsigned long	in_pos,
+			unsigned long	aes_keys_pos,
+			unsigned long	ivs_pos,
+			unsigned long	hmac_keys_pos,
+			unsigned long	pkt_offset_pos,
+			unsigned long	actual_length_pos,
+			unsigned long	tot_in_len,
+			unsigned long	tot_out_len,
+			unsigned long	num_flows,
+			unsigned int	stream_id,
+			unsigned int	bits);
 
 /**
  * It executes AES-CBC encryption in GPU.

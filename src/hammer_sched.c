@@ -12,6 +12,11 @@ pthread_mutex_t mutex_worker_init = PTHREAD_MUTEX_INITIALIZER;
 pthread_key_t worker_sched_struct;
 pthread_key_t worker_batch_struct;
 
+extern hammer_config_t *config;
+extern hammer_sched_t *sched_set;
+extern pthread_mutex_t mutex_worker_init;
+extern pthread_key_t worker_sched_struct;
+
 inline hammer_sched_t *hammer_sched_get_sched_struct()
 {
     return pthread_getspecific(worker_sched_struct);
@@ -32,8 +37,8 @@ int hammer_sched_node_init(hammer_sched_t *sched, int epoll_fd, int thread_id)
 
 	sched->initialized = 0;
 
-	sched->accepted_connections = 0;
-	sched->closed_connections = 0;
+	sched->client_connections = 0;
+	sched->server_connections = 0;
 
 	return 0;
 }
@@ -50,19 +55,17 @@ int hammer_sched_want_no_conn(hammer_sched_t *sched)
 	return 0;
 }
 
-void hammer_sched_add_connection(hammer_connection_t *c, hammer_sched_t *sched, int ctype)
+void hammer_sched_add_connection(hammer_connection_t *c, hammer_sched_t *sched)
 {
 	int ret;
 
-	ret = hammer_epoll_add(sched->epoll_fd, remote_fd, HAMMER_EPOLL_READ,
+	ret = hammer_epoll_add(sched->epoll_fd, c->socket, HAMMER_EPOLL_READ,
 			HAMMER_EPOLL_LEVEL_TRIGGERED, (void *)c);
 	if (hammer_likely(ret == 0)) {
-		if (ctype == HAMMER_CONN_CONNECTED) {
-			/* rc != NULL, this connection is added by connect(), to server */
-			sched->connected_connections ++;
-		} else { /* HAMMER_CONN_ACCEPTED */
-			/* rc == NULL, this connection is added by accept(), from client */
-			sched->accepted_connections ++;
+		if (c->type == HAMMER_CONN_CLIENT) {
+			sched->client_connections ++;
+		} else { /* HAMMER_CONN_SERVER */
+			sched->server_connections ++;
 		}
 	} else {
 		/* fails, close the connection */

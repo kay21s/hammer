@@ -15,8 +15,7 @@
  */
 
 
-typedef hammer_timer_s {
-
+typedef struct hammer_timer_s {
     uint64_t freq;
     uint64_t clocks;
     uint64_t start;
@@ -24,6 +23,7 @@ typedef hammer_timer_s {
 
 int hammer_timer_init();
 int hammer_timer_start(hammer_timer_t *timer);
+int hammer_timer_restart(hammer_timer_t *timer);
 int hammer_timer_stop(hammer_timer_t *timer);
 int hammer_timer_reset(hammer_timer_t *timer);
 double hammer_timer_get_total_time(hammer_timer_t *timer);

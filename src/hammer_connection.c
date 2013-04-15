@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include "hammer_connection.h"
 #include "hammer_macros.h"
 #include "hammer_list.h"
@@ -15,17 +16,17 @@ hammer_job_t *hammer_job_get()
 	return (hammer_job_t *)hammer_mem_malloc(sizeof(hammer_job_t));
 #else
 	hammer_sched_t *sched = hammer_sched_get_sched_struct();
-	return (hammer_job_t *)libpool_alloc(SIZE_JOB, sched->thread_id);
+	return (hammer_job_t *)libpool_alloc(MEMPOOL_SIZE_JOB, sched->thread_id);
 #endif
 }
 
-int hammer_job_del(hammer_job_t *job)
+int hammer_job_free(hammer_job_t *job)
 {
 #if defined(HAMMER_MALLOC)
 	hammer_mem_free(job);
 #else
 	hammer_sched_t *sched = hammer_sched_get_sched_struct();
-	libpool_free(job, SIZE_JOB, sched->thread_id);
+	libpool_free(job, MEMPOOL_SIZE_JOB, sched->thread_id);
 #endif
 	return 0;
 }
@@ -64,7 +65,6 @@ void hammer_conn_init()
 void hammer_init_connection(hammer_connection_t *c)
 {
 	c->socket = 0;
-	c->type = HAMMER_CONN_RAW;
 	c->body_ptr = hammer_mem_malloc(config->conn_buffer_size);
 	c->body_size = config->conn_buffer_size;
 	c->body_length = 0;
@@ -76,12 +76,16 @@ void hammer_init_connection(hammer_connection_t *c)
 
 hammer_connection_t *hammer_get_connection()
 {
+	hammer_connection_t *c;
 #if defined(HAMMER_MALLOC)
-	return hammer_mem_malloc(sizeof(hammer_connection_t));
+	c = hammer_mem_malloc(sizeof(hammer_connection_t));
 #else
 	hammer_sched_t *sched = hammer_sched_get_sched_struct();
-	return (hammer_connection_t *)libpool_alloc(SIZE_CONN, sched->thread_id);
+	c = (hammer_connection_t *)libpool_alloc(MEMPOOL_SIZE_CONN, sched->thread_id);
 #endif
+	hammer_init_connection(c);
+
+	return c;
 }
 
 void hammer_free_connection(hammer_connection_t *c)
@@ -90,7 +94,7 @@ void hammer_free_connection(hammer_connection_t *c)
 	hammer_mem_free(c);
 #else
 	hammer_sched_t *sched = hammer_sched_get_sched_struct();
-	libpool_free(c, SIZE_CONN, sched->thread_id);
+	libpool_free(c, MEMPOOL_SIZE_CONN, sched->thread_id);
 #endif
 	return;
 }

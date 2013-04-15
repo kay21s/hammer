@@ -1,19 +1,20 @@
 #include <stdint.h>
 #include <cuda_runtime.h>
-//#include <cutil_inline.h>
+//#include <helper_cuda.h>
+//#include <helper_timer.h>
 
 void *cuda_device_mem_alloc(unsigned long size)
 {
 	void *mem;
-        cutilSafeCall(cudaMalloc(&mem, size));
-        return mem;
+	cudaMalloc(&mem, size);
+	return mem;
 }
 
 
 void cuda_device_mem_free(uint8_t *mem)
 {
 	if (mem) {
-		cutilSafeCall(cudaFree(mem));
+		cudaFree(mem);
 		mem = NULL;
 	}
 }
@@ -21,14 +22,14 @@ void cuda_device_mem_free(uint8_t *mem)
 void *cuda_pinned_mem_alloc(unsigned long size)
 {
 	void *mem;
-	cutilSafeCall(cudaHostAlloc(&mem, size, cudaHostAllocPortable));
+	cudaHostAlloc(&mem, size, cudaHostAllocPortable);
 	return mem;
 }
 
 void cuda_pinned_mem_free(uint8_t *mem)
 {
 	if (mem) {
-		cutilSafeCall(cudaFreeHost(mem));
+		cudaFreeHost(mem);
 		mem = NULL;
 	}
 }

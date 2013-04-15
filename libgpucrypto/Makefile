@@ -1,8 +1,5 @@
 GPUCRYPTO_DIR = ./
 
-#include Makefile.in
-
-
 ####################################################
 # OS Name (Linux or Darwin)
 OSUPPER = $(shell uname -s 2>/dev/null | tr [:lower:] [:upper:])
@@ -42,7 +39,7 @@ endif
 
 # Common binaries
 NVCC            ?= $(CUDA_BIN_PATH)/nvcc
-CC             ?= gcc
+GCC             := gcc
 
 # CUDA code generation flags
 GENCODE_SM10    := -gencode arch=compute_10,code=sm_10
@@ -82,7 +79,7 @@ endif
 
 
 # Common includes and paths for CUDA
-NVCCINCLUDES      := -I$(CUDA_INC_PATH) -I. -I.. # -I../../common/inc
+NVCCINCLUDES      := -I$(CUDA_INC_PATH) -I. -I/usr/local/cuda-5.0/samples/common/inc/
 
 ####################################################
 
@@ -119,7 +116,7 @@ $(DEPS): $(SRC_FILES) $(HEADER_FILES)
 	$(CC) -MM -MP -x c++ $(CU_SRC_FILES) $(CC_SRC_FILES) | sed 's![^:]*.o:!objs/&!g' > Makefile.dep
 
 $(OBJS_DIR)/%.o : %.c
-	$(CC) $(CCFLAGS) $(LDFLAGS) $(NVCCINCLUDES) -c $< -o $@
+	$(GCC) $(CCFLAGS) $(NVCCINCLUDES) -c $< -o $@
 
 $(OBJS_DIR)/%.o : %.cu
 	$(NVCC) $(NVCCFLAGS) $(GENCODE_FLAGS) $(NVCCINCLUDES) -c $< -o $@

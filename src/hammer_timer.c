@@ -3,9 +3,9 @@
 #include <sys/time.h>
 #include <time.h>
 
-int hammer_timer_init()
+int hammer_timer_init(hammer_timer_t *timer)
 {
-	freq = 1000;
+	timer->freq = 1000;
 
 	return 0;
 }
@@ -25,7 +25,7 @@ int hammer_timer_restart(hammer_timer_t *timer)
 	clock_gettime(CLOCK_REALTIME, &s);
 	timer->start = (uint64_t)s.tv_sec * 1e9 + (uint64_t)s.tv_nsec;
 
-	_clocks = 0;
+	timer->clocks = 0;
 
 	return 0;
 }
@@ -47,7 +47,7 @@ int hammer_timer_stop(hammer_timer_t *timer)
 
 int hammer_timer_reset(hammer_timer_t *timer)
 {
-	_clocks = 0;
+	timer->clocks = 0;
 
 	return 0;
 }

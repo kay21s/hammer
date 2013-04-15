@@ -14,20 +14,21 @@
 #include "hammer_macros.h"
 #include "hammer.h"
 
+extern hammer_config_t *config;
+
 /* connect to server */
 int hammer_handler_connect(hammer_connection_t *c)
 {
 	struct sockaddr_in address;
-	int ret, socket;
+	int ret;
 	hammer_sched_t *sched = hammer_sched_get_sched_struct();
 	hammer_connection_t *new_c;
 
 	/* Get a connection and associate with the epoll event */
 	new_c = hammer_get_connection();
-	hammer_init_connection(new_c);
 
 	new_c->socket = hammer_socket_create();
-	new_c->type = HAMMER_CONN_RAW;
+	new_c->type = HAMMER_CONN_SERVER;
 	new_c->rc = c;
 	c->rc = new_c;
 
@@ -42,7 +43,7 @@ int hammer_handler_connect(hammer_connection_t *c)
 	}
 
 	/* Assign socket to worker thread */
-	hammer_sched_add_connection(new_c, sched, HAMMER_CONN_CONNECTED);
+	hammer_sched_add_connection(new_c, sched);
 
 	return 0;
 }
@@ -78,23 +79,23 @@ int hammer_handler_listen()
 
 hammer_connection_t *hammer_handler_accept(int server_socket)
 {
-	int remote_socket, ret;
-	hammer_connection_t *c;
+	hammer_connection_t *c = hammer_get_connection();
 
-	remote_socket = hammer_socket_accept(server_socket);
-	if (remote_socket < 0) {
+	c->socket = hammer_socket_accept(server_socket);
+	if (c->socket < 0) {
 		hammer_warn("error socket accept\n");
-		return -1;
+		exit(0);
 	}
 
 	/* Set this socket non-blocking */
-	hammer_socket_set_nonblocking(remote_socket);
+	hammer_socket_set_nonblocking(c->socket);
 
 	/* Get a connection and associate with the epoll event */
 	c = hammer_get_connection();
 	hammer_init_connection(c);
+	c->type = HAMMER_CONN_CLIENT;
 
-#if defined(SSL)
+#if 0
 	if (config->ssl) {
 		/* Accepted connection must be a SSL connection from client */
 		c->ssl = 1;
@@ -136,11 +137,6 @@ int hammer_handler_write(hammer_connection_t *c)
 	hammer_job_t *this_job;
 	struct hammer_list *job_list, *job_head;
 
-	if (c->type != HAMMER_CONN_RAW) {
-		hammer_err("What's up, this should not be a rtsp connection\n");
-		exit(0);
-	}
-
 	// c->rc, this is the socket to write to, now we get the socket that has read something
 	job_list = c->rc->job_list;
 	hammer_list_foreach(job_head, job_list) {
@@ -180,9 +176,9 @@ int hammer_handler_read(hammer_connection_t *c)
 	}
 
 	/* Read incomming data */
-	if (c->type != HAMMER_CONN_RTSP) { 
+	if (c->type != HAMMER_CONN_CLIENT) { 
 		hammer_err("What's up, this should be a rtsp connection\n");
-		exit(0)
+		exit(0);
 	}
 
 	recv = hammer_socket_read(
@@ -209,7 +205,7 @@ int hammer_handler_read(hammer_connection_t *c)
 		}
 
 		// activate the other socket to be write to
-		if (c->r_conn == NULL) {
+		if (c->rc == NULL) {
 			// the connection has not been established, now we connect it
 			hammer_handler_connect(c);
 		}

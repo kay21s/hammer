@@ -1,9 +1,14 @@
 #include <assert.h>
 #include <stdlib.h>
-//#include <cutil_inline.h>
 
 #include "crypto_context.h"
+#include "device_context.h"
 #include "crypto_kernel.h"
+#include "crypto_mem.h"
+#include "co_aes_sha1.h"
+#include <cuda_runtime.h>
+//#include <helper_cuda.h>
+//#include <helper_timer.h>
 
 #define AES_BLOCK_SIZE 16
 #define THREADS_PER_BLK 256 // in order to load t box into shared memory on parallel
@@ -37,20 +42,21 @@ void crypto_context_init(crypto_context_t *cry_ctx,
 	}*/
 }
 
-void crypto_context_aes_sha1_encrypt(crypto_context_t *cry_ctx,
-			const void	     *input_start,
-			void		     *output_start,
-			const unsigned long  in_pos,
-			const unsigned long  aes_keys_pos,
-			const unsigned long  ivs_pos,
-			const unsigned long  hmac_keys_pos,
-			const unsigned long  pkt_offset_pos,
-			const unsigned long  actual_length_pos,
-			const unsigned long  tot_in_len,
-			const unsigned long  tot_out_len,
-			const unsigned long  num_flows,
-			const unsigned int   stream_id,
-			const unsigned int   bits)
+void crypto_context_aes_sha1_encrypt(
+			crypto_context_t *cry_ctx,
+			void			*input_start,
+			void			*output_start,
+			unsigned long	in_pos,
+			unsigned long	aes_keys_pos,
+			unsigned long	ivs_pos,
+			unsigned long	hmac_keys_pos,
+			unsigned long	pkt_offset_pos,
+			unsigned long	actual_length_pos,
+			unsigned long	tot_in_len,
+			unsigned long	tot_out_len,
+			unsigned long	num_flows,
+			unsigned int	stream_id,
+			unsigned int	bits)
 {
 	assert(bits == 128);
 	device_context_t *dev_ctx = cry_ctx->dev_ctx;
@@ -129,12 +135,12 @@ uint8_t crypto_context_sync(crypto_context_t   *cry_ctx,
 	device_context_t *dev_ctx = cry_ctx->dev_ctx;
 	if (block) {
 		device_context_sync(dev_ctx, stream_id, true);
-		if (copy_result && device_contex_get_state(dev_ctx, stream_id) == WAIT_KERNEL) {
-			cutilSafeCall(cudaMemcpyAsync(output_start,
-						      cry_ctx->streams[stream_id].output_d,
-						      cry_ctx->streams[stream_id].out_len,
-						      cudaMemcpyDeviceToHost,
-						      device_context_get_stream(dev_ctx, stream_id)));
+		if (copy_result && device_context_get_state(dev_ctx, stream_id) == WAIT_KERNEL) {
+			cudaMemcpyAsync(output_start,
+							cry_ctx->streams[stream_id].output_d,
+							cry_ctx->streams[stream_id].out_len,
+							cudaMemcpyDeviceToHost,
+							device_context_get_stream(dev_ctx, stream_id));
 			device_context_set_state(dev_ctx, stream_id, WAIT_COPY);
 			device_context_sync(dev_ctx, stream_id, true);
 			device_context_set_state(dev_ctx, stream_id, READY);
@@ -154,15 +160,15 @@ uint8_t crypto_context_sync(crypto_context_t   *cry_ctx,
 				return true;
 			}
 
-			cutilSafeCall(cudaMemcpyAsync(output_start,
-						      cry_ctx->streams[stream_id].output_d,
-						      cry_ctx->streams[stream_id].out_len,
-						      cudaMemcpyDeviceToHost,
-						      device_context_get_stream(dev_ctx, stream_id)));
+			cudaMemcpyAsync(output_start,
+							cry_ctx->streams[stream_id].output_d,
+							cry_ctx->streams[stream_id].out_len,
+							cudaMemcpyDeviceToHost,
+							device_context_get_stream(dev_ctx, stream_id));
 			device_context_set_state(dev_ctx, stream_id, WAIT_COPY);
 
 		} else if (device_context_get_state(dev_ctx, stream_id) == WAIT_COPY) {
-			device_context_set_stat(dev_ctx, stream_id, READY);
+			device_context_set_state(dev_ctx, stream_id, READY);
 			return true;
 		} else if (device_context_get_state(dev_ctx, stream_id) == READY) {
 			return true;

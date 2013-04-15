@@ -1,7 +1,7 @@
 #ifndef DEVICE_CONTEXT_H
 #define DEVICE_CONTEXT_H
 
-#include "cuda_mem.h"
+#include "crypto_mem.h"
 
 #include <cuda_runtime.h>
 #include <assert.h>

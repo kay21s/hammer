@@ -23,18 +23,18 @@ static inline void hammer_list_init(struct hammer_list *list)
 	list->prev = list;
 }
 
-static inline void __hammer_list_add(struct hammer_list *new, struct hammer_list *prev,
+static inline void __hammer_list_add(struct hammer_list *elem, struct hammer_list *prev,
                                  struct hammer_list *next)
 {
-	next->prev = new;
-	new->next = next;
-	new->prev = prev;
-	prev->next = new;
+	next->prev = elem;
+	elem->next = next;
+	elem->prev = prev;
+	prev->next = elem;
 }
 
-static inline void hammer_list_add(struct hammer_list *new, struct hammer_list *head)
+static inline void hammer_list_add(struct hammer_list *elem, struct hammer_list *head)
 {
-	__hammer_list_add(new, head->prev, head);
+	__hammer_list_add(elem, head->prev, head);
 }
 
 static inline void __hammer_list_del(struct hammer_list *prev, struct hammer_list *next)

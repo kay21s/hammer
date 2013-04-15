@@ -1,9 +1,9 @@
 #ifndef HAMMER_LOG_H
 #define HAMMER_LOG_H
 
-typedef hammer_log_sample_s {
-	bool          isMsg;
-	bool          isErr;
+typedef struct hammer_log_sample_s {
+	unsigned int	isMsg;
+	unsigned int	isErr;
 	double        timer;
 	unsigned int  nbytes;
 	int           loops;
@@ -12,7 +12,7 @@ typedef hammer_log_sample_s {
 	int           num;
 } hammer_log_sample_t;
 
-typedef hammer_log_s {
+typedef struct hammer_log_s {
 	unsigned int idx;
 	unsigned int loops;
 	unsigned int loop_entries;

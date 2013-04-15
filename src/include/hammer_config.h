@@ -8,6 +8,8 @@ typedef struct hammer_config_s {
 	unsigned int gpu_worker_num;
 	unsigned int worker_num; // cpu_worker_num + gpu_worker_num
 	unsigned int epoll_max_events;
+	unsigned int iterations;
+	unsigned int log_sample_num;
 
 	char *server_ip;
 	unsigned int server_port;

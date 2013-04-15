@@ -5,7 +5,7 @@
 
 int hammer_handler_connect(hammer_connection_t *c);
 int hammer_handler_listen();
-int hammer_handler_accept(int server_socket);
+hammer_connection_t *hammer_handler_accept(int server_socket);
 int hammer_handler_error(hammer_connection_t *c);
 int hammer_handler_close(hammer_connection_t *c);
 int hammer_handler_read(hammer_connection_t *c);

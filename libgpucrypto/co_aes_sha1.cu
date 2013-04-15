@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <assert.h>
+#include "co_aes_sha1.h"
 
 /* AES counter mode + HMAC SHA-1, 
    the encryption of each block in AES counter mode is not parallelized in this implementation */
@@ -11,7 +12,7 @@ __global__ void aes_ctr_sha1_kernel(
 			uint8_t *output_buf,
 			const uint8_t *aes_keys,
 			uint8_t *ivs,
-			const char *hmac_keys,
+			const uint8_t *hmac_keys,
 			const uint32_t *pkt_offset,
 			const uint16_t *length,
 			const unsigned int num_flows,
@@ -196,19 +197,18 @@ __global__ void aes_ctr_sha1_kernel(
 		*(checkbits + blockIdx.x) = 1;
 }
 
-
-void co_aes_sha1_gpu(
-			uint8_t	*in,
-			uint8_t			*out,
-			const uint8_t	*aes_keys,
-			uint8_t			*ivs,
-			const char		*hmac_keys,
-			const uint32_t	*pkt_offset,
-			const uint16_t	*actual_length,
-			const unsigned int num_flows,
-			uint8_t			*checkbits,
-			unsigned		threads_per_blk,
-			cudaStream_t	stream)
+extern "C" void co_aes_sha1_gpu(
+			uint8_t		*in,
+			uint8_t		*out,
+			uint8_t		*aes_keys,
+			uint8_t		*ivs,
+			uint8_t		*hmac_keys,
+			uint32_t	*pkt_offset,
+			uint16_t	*actual_length,
+			unsigned int num_flows,
+			uint8_t		*checkbits,
+			unsigned	threads_per_blk,
+			cudaStream_t stream)
 {
 	int num_blks = (num_flows + threads_per_blk - 1) / threads_per_blk;
 
@@ -220,3 +220,4 @@ void co_aes_sha1_gpu(
 		       in, out, aes_keys, ivs, hmac_keys, pkt_offset, actual_length, num_flows, checkbits);
 	}
 }
+

@@ -1,6 +1,8 @@
 #include <sys/time.h>
-//#include <cutil_inline.h>
 #include <assert.h>
+#include <cuda_runtime.h>
+//#include <helper_cuda.h>
+//#include <helper_timer.h>
 
 #include "device_context.h"
 
@@ -21,12 +23,12 @@ void device_context_free(device_context_t *dc)
 {
 	uint8_t i;
 	for (i = 1; i <= dc->nstream; i++) {
-		cutilSafeCall(cudaStreamDestroy(dc->stream_ctx[i].stream));
-		cutilSafeCall(cudaFreeHost(dc->stream_ctx[i].checkbits));
+		cudaStreamDestroy(dc->stream_ctx[i].stream);
+		cudaFreeHost(dc->stream_ctx[i].checkbits);
 	}
 
 	if (dc->nstream == 0) {
-		cutilSafeCall(cudaFreeHost((void*)dc->stream_ctx[0].checkbits));
+		cudaFreeHost((void*)dc->stream_ctx[0].checkbits);
 	}
 }
 
@@ -41,20 +43,20 @@ uint8_t device_context_init(device_context_t *dc, const unsigned nstream)
 
 	if (nstream > 0) {
 		for (i = 1; i <= nstream; i++) {
-			cutilSafeCall(cudaStreamCreate(&(dc->stream_ctx[i].stream)));
+			cudaStreamCreate(&(dc->stream_ctx[i].stream));
 			dc->stream_ctx[i].state = READY;
 
-			cutilSafeCall(cudaHostAlloc(&ret, MAX_BLOCKS, cudaHostAllocMapped));
+			cudaHostAlloc(&ret, MAX_BLOCKS, cudaHostAllocMapped);
 			dc->stream_ctx[i].checkbits = (uint8_t*)ret;
-			cutilSafeCall(cudaHostGetDevicePointer((void **)&(dc->stream_ctx[i].checkbits_d), ret, 0));
+			cudaHostGetDevicePointer((void **)&(dc->stream_ctx[i].checkbits_d), ret, 0);
 		}
 	} else {
 		dc->stream_ctx[0].stream = 0;
 		dc->stream_ctx[0].state = READY;
 
-		cutilSafeCall(cudaHostAlloc(&ret, MAX_BLOCKS, cudaHostAllocMapped));
+		cudaHostAlloc(&ret, MAX_BLOCKS, cudaHostAllocMapped);
 		dc->stream_ctx[0].checkbits = (uint8_t*)ret;
-		cutilSafeCall(cudaHostGetDevicePointer((void **)&(dc->stream_ctx[0].checkbits_d), ret, 0));
+		cudaHostGetDevicePointer((void **)&(dc->stream_ctx[0].checkbits_d), ret, 0);
 	}
 	return true;
 }

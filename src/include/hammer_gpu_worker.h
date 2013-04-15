@@ -17,14 +17,14 @@ typedef struct hammer_gpu_worker_s {
 
 typedef struct hammer_gpu_worker_context_s {
 	hammer_batch_t *cpu_batch_set;
-	hammer_sched_t *sched;
+	hammer_sched_t *sched_set;
 	int core_id; /* which core should gpu worker run */
 	/* Add more info passing to GPU worker here ... */
 } hammer_gpu_worker_context_t;
 
 void *hammer_gpu_worker_loop(void *context);
-void hammer_gpu_get_batch(hammer_gpu_worker_t *g, hammer_batch_buf_t *batch_set);
-void hammer_gpu_give_result(hammer_gpu_worker_t *g, hammer_batch_buf_t *batch_set);
+void hammer_gpu_get_batch(hammer_gpu_worker_t *g, hammer_batch_t *batch_set);
+void hammer_gpu_give_result(hammer_gpu_worker_t *g, hammer_batch_t *batch_set);
 void hammer_gpu_worker_init(hammer_gpu_worker_t *g, hammer_batch_t *batch_set, hammer_sched_t *sched_set);
 
 #endif

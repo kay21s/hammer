@@ -1,15 +1,17 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <iostream>
 
 #include "hammer_log.h"
 #include "hammer_memory.h"
+#include "hammer_config.h"
+
+extern hammer_config_t *config;
 
 // Add "num" variable based on original version
 void hammer_sample_set_msg(hammer_log_sample_t *sample, const char *fmt, const char *msg, int num)
 {
-	sample->isMsg = true;
+	sample->isMsg = 1;
 
 	sample->fmt = hammer_mem_malloc(strlen(fmt)+1);
 	strcpy(sample->fmt, fmt);
@@ -22,7 +24,7 @@ void hammer_sample_set_msg(hammer_log_sample_t *sample, const char *fmt, const c
 
 void hammer_sample_set_timer(hammer_log_sample_t *sample, const char *fmt, const char *msg, double timer, unsigned int nbytes, int loops)
 {
-	sample->isMsg = false;
+	sample->isMsg = 0;
 	sample->timer = timer;
 
 	if (loops != 0)	sample->loops = loops;
@@ -41,7 +43,7 @@ void hammer_sample_set_timer(hammer_log_sample_t *sample, const char *fmt, const
 
 void hammer_sample_print(hammer_log_sample_t *sample)
 {
-	if(sample->isMsg == true) {
+	if(sample->isMsg == 1) {
 		printf(sample->fmt, sample->msg, sample->num);
 	} else {
 		double bwd = (((double) sample->nbytes * sample->loops )/ sample->timer) / 1e9;
@@ -57,7 +59,7 @@ void hammer_log_init(hammer_log_t *log)
 	log->loops = 0;
 	log->loop_entries = 0;
 	log->loop_timers = 0;
-	log->samples = hammer_mem_malloc(config->log_sample_num * sizeof(hammer_log_sample_t))
+	log->samples = hammer_mem_malloc(config->log_sample_num * sizeof(hammer_log_sample_t));
 }
 
 void hammer_log_loop_marker(hammer_log_t *log)
@@ -84,7 +86,7 @@ void hammer_log_print(hammer_log_t *log)
 	int i;
 
 	for(i = 0; i < log->loop_entries; i++) {
-		hammer_sample_print(log->samples[i]);
+		hammer_sample_print(&(log->samples[i]));
 	}
 }
 

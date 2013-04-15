@@ -10,11 +10,11 @@ typedef struct hammer_batch_buf_s
 	void *input_buf;
 	void *output_buf;
 
-	unsigned int aes_keys_pos;
+	unsigned int aes_key_pos;
 	unsigned int ivs_pos;
-	unsigned int pkt_offsets_pos;
+	unsigned int pkt_offset_pos;
 	unsigned int length_pos;
-	unsigned int hmac_keys_pos;
+	unsigned int hmac_key_pos;
 	
 	// Job for forwarding
 	hammer_job_t *job_list;
@@ -52,9 +52,10 @@ typedef struct hammer_batch_s
 extern pthread_key_t worker_batch_struct;
 
 int hammer_batch_init();
-int hammer_batch_job_add(hammer_batch_t *batch, hammer_connection_t *c, int length);
+int hammer_batch_job_add(hammer_connection_t *c, int length);
 int hammer_batch_handler_read(hammer_connection_t *c);
-int hammer_batch_forwarding(hammer_batch_t *batch);
-int hammer_batch_switch_buffer(hammer_batch_t *batch);
+int hammer_batch_forwarding();
+int hammer_batch_switch_buffer();
+int hammer_batch_if_gpu_processed_new();
 
 #endif

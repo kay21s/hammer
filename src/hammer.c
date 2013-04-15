@@ -36,15 +36,17 @@ Client        (SRTP)         Proxy         (RTP)         Server
 
 hammer_config_t *config;
 hammer_batch_t *batch_set;
+hammer_sched_t *sched_set;
+extern pthread_key_t worker_sched_struct;
 
 int hammer_init_config()
 {
 	int length, i;
 
-	config = hammer_mem_calloc(sizeof(hammer_config_t));
+	config = (hammer_config_t *)hammer_mem_calloc(sizeof(hammer_config_t));
 
 	//config->ssl = 0; // if this is a ssl proxy
-	config->type = HAMMER_CONN_RTSP; // this is a rtsp proxy
+	//config->type = HAMMER_CONN_RTSP; // this is a rtsp proxy
 	config->gpu = 0; // if this need batch processing by GPU
 
 	config->cpu_worker_num = 1;
@@ -53,23 +55,25 @@ int hammer_init_config()
 	config->epoll_max_events = 128;
 
 	length = strlen("219.219.216.11");
-	config->server_ip = malloc(length);
+	config->server_ip = (char *)malloc(length);
 	memcpy(config->server_ip, "219.219.216.11", length);
 	config->server_port = 80;
 
 	length = strlen("127.0.0.1");
-	config->listen_ip = malloc(length);
+	config->listen_ip = (char *)malloc(length);
 	memcpy(config->listen_ip, "127.0.0.1", length);
 	config->listen_port = 80;
 
 	config->conn_buffer_size = 4096;
 
-	config->core_ids = hammer_mem_malloc(config->worker_num * sizeof(unsigned int));
+	config->core_ids = (unsigned int *)hammer_mem_malloc(config->worker_num * sizeof(unsigned int));
 	for (i = 0; i < config->worker_num; i ++) {
 		/* currently, we use this sequence */
 		config->core_ids[i] = i;
 	}
 
+	config->iterations = 5;
+	config->log_sample_num = 100;
 	config->I = 40; // ms
 	/* we take 40ms as parameter, for 10Gbps bandwidth,
 	   40ms * 10Gbps = 400 * 10^3 bits ~= (<) 50 KB = 40 * 1.25 * 10^3.
@@ -105,7 +109,7 @@ int hammer_init_config()
 
 int hammer_init_sched_set()
 {
-	int i;
+	unsigned int i;
 
 	sched_set = (hammer_sched_t *)hammer_mem_malloc(config->worker_num * sizeof(hammer_sched_t));
 	for (i = 0; i < config->worker_num; i ++) {
@@ -123,12 +127,12 @@ int hammer_init_batch_set()
 
 int hammer_init_libpool()
 {
-	int i;
+	unsigned int i;
 	libpool_init();
 
 	for (i = 0; i < config->cpu_worker_num; i ++) {
-		libpool_init_size(SIZE_JOB, config->cpu_job_max_num, sizeof(hammer_job_t), i);
-		libpool_init_size(SIZE_CONN, config->cpu_conn_max_num, sizeof(hammer_connection_t), i);
+		libpool_init_size(MEMPOOL_SIZE_JOB, config->cpu_job_max_num, sizeof(hammer_job_t), i);
+		libpool_init_size(MEMPOOL_SIZE_CONN, config->cpu_conn_max_num, sizeof(hammer_connection_t), i);
 	}
 	return 0;
 }
@@ -141,7 +145,8 @@ void hammer_init_thread_keys()
 
 int hammer_launch_cpu_workers()
 {
-	int efd, i;
+	int efd;
+	unsigned int i;
 	pthread_t tid;
 	pthread_attr_t attr;
 	hammer_cpu_worker_context_t *context;
@@ -177,7 +182,8 @@ int hammer_launch_gpu_workers()
 {
 	pthread_t tid;
 	pthread_attr_t attr;
-	int thread_id, i;
+	int thread_id;
+	unsigned int i;
 	hammer_gpu_worker_context_t * context;
 	hammer_sched_t *sched_node;
 
@@ -191,7 +197,7 @@ int hammer_launch_gpu_workers()
 		context->core_id = config->core_ids[thread_id];
 		sched_node = &(sched_set[i]);
 		hammer_sched_node_init(sched_node, 0, thread_id);
-		context->sched = sched_node;
+		context->sched_set = sched_set;
 
 		pthread_attr_init(&attr);
 		pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);

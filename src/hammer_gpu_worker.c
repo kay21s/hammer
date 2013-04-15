@@ -17,10 +17,16 @@
 #include "hammer_config.h"
 #include "hammer_macros.h"
 #include "hammer_batch.h"
+#include "hammer_gpu_worker.h"
+#include "hammer_log.h"
+#include "hammer_timer.h"
 #include "../libgpucrypto/crypto_context.h"
 
+extern hammer_config_t *config;
+extern pthread_mutex_t mutex_worker_init;
+
 /* Get the buffer of each CPU worker at each time interval I */
-void hammer_gpu_get_batch(hammer_gpu_worker_t *g, hammer_batch_buf_t *batch_set)
+void hammer_gpu_get_batch(hammer_gpu_worker_t *g, hammer_batch_t *batch_set)
 {
 	int i, id;
 	hammer_batch_t *batch;
@@ -57,7 +63,7 @@ void hammer_gpu_get_batch(hammer_gpu_worker_t *g, hammer_batch_buf_t *batch_set)
 }
 
 /* Tell the CPU worker that this batch has been completed */
-void hammer_gpu_give_result(hammer_gpu_worker_t *g, hammer_batch_buf_t *batch_set)
+void hammer_gpu_give_result(hammer_gpu_worker_t *g, hammer_batch_t *batch_set)
 {
 	int i;
 	hammer_batch_t *batch;
@@ -65,10 +71,10 @@ void hammer_gpu_give_result(hammer_gpu_worker_t *g, hammer_batch_buf_t *batch_se
 	for (i = 0; i < config->cpu_worker_num; i ++) {
 		batch = &(batch_set[i]);
 
-		if (batch->processed_buf_index == -1) {
+		if (batch->processed_buf_id == -1) {
 			/* just mark there is a buf been processed */
 			pthread_mutex_lock(&(batch->mutex_batch_complete));
-			batch->processed_buf_index = g->buf_set_id;
+			batch->processed_buf_id = g->buf_set_id;
 			pthread_mutex_unlock(&(batch->mutex_batch_complete));
 		} else {
 			hammer_err("error in hammer_gpu_take_buf\n");
@@ -128,9 +134,11 @@ void *hammer_gpu_worker_loop(void *c)
 	hammer_gpu_worker_context_t *context = c;
 	hammer_batch_t *batch_set = context->cpu_batch_set;
 	hammer_sched_t *sched_set = context->sched_set;
-	int ready, core_id = context->core_id;
+	int i, first, ready, core_id = context->core_id;
 	unsigned long mask = 0;
 	double elapsed_time;
+	int cuda_stream_id;
+	hammer_batch_buf_t *buf;
 
 	/* Set affinity of this gpu worker */
 	mask = 1 << core_id;
@@ -167,8 +175,8 @@ void *hammer_gpu_worker_loop(void *c)
 	/* Timers for each kernel launch */
 	hammer_timer_restart(&loopcounter);
 	
-	for (int i = 0; i < config->iterations; i ++) {
-		timeLog->loopMarker();
+	for (i = 0; i < config->iterations; i ++) {
+		hammer_log_loop_marker(&log);
 
 		/* Counter for the whole loop, from the second loop */
 		if (i == 2)	hammer_timer_restart(&counter);
@@ -193,7 +201,7 @@ void *hammer_gpu_worker_loop(void *c)
 			}
 		} while (abs(elapsed_time - config->I) > 1);
 
-		hammer_timeLog_msg(&log, "%s %d\n", ">>>>>>>>Time point arrived : ", elapsed_time);
+		hammer_log_msg(&log, "%s %d\n", ">>>>>>>>Time point arrived : ", elapsed_time);
 		hammer_timer_restart(&loopcounter);
 
 
@@ -215,27 +223,27 @@ void *hammer_gpu_worker_loop(void *c)
 
 		/* We launch each cpu worker batch as a stream*/
 		for (cuda_stream_id = 0; cuda_stream_id < config->cpu_worker_num; cuda_stream_id ++) {
-			buf_t = buf_set[cuda_stream_id];
+			buf = g.cur_buf_set[cuda_stream_id];
 
 			// FIXME:
 			crypto_context_aes_sha1_encrypt (
-				&cry_ctx,
-				buf_t->input_buf,
-				buf_t->output_buf,
+				&(g.cry_ctx),
+				buf->input_buf,
+				buf->output_buf,
 				0, // in_pos
-				buf_t->aes_keys_pos,
-				buf_t->ivs_pos,
-				buf_t->hmac_keys_pos,
-				buf_t->pkt_offset_pos,
-				buf_t->length_pos,
-				buf_t->buf_size, // input buffer size
-				buf_t->buf_length, // output buffer size FIXME ???
-				buf_t->job_num,
+				buf->aes_key_pos,
+				buf->ivs_pos,
+				buf->hmac_key_pos,
+				buf->pkt_offset_pos,
+				buf->length_pos,
+				buf->buf_size, // input buffer size
+				buf->buf_length, // output buffer size FIXME ???
+				buf->job_num,
 				cuda_stream_id,
 				128);
 
 			/* Wait for transfer completion */
-			crypto_context_sync(&cry_ctx, cuda_stream_id, buf_t->output_buf, 1, 1);
+			crypto_context_sync(&(g.cry_ctx), cuda_stream_id, buf->output_buf, 1, 1);
 		}
 
 		hammer_timer_stop(&t);
@@ -250,8 +258,8 @@ void *hammer_gpu_worker_loop(void *c)
 	}
 
 	hammer_timer_stop(&counter);
-	printf("End of execution, now the program costs : %d ms\n", hammer_timer_get_total_time(&counter));
-	printf("Processing speed is %.2f Mbps\n", (bytes * 8) / (1e3 * hammer_timer_get_total_time(&counter)));
+	printf("End of execution, now the program costs : %f ms\n", hammer_timer_get_total_time(&counter));
+	//FIXME:printf("Processing speed is %.2f Mbps\n", (bytes * 8) / (1e3 * hammer_timer_get_total_time(&counter)));
 
 	return 0;
 }

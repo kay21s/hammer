@@ -11,6 +11,10 @@
 #include "hammer_macros.h"
 #include "hammer_handler.h"
 
+extern hammer_config_t *config;
+extern hammer_sched_t *sched_set;
+extern pthread_mutex_t mutex_worker_init;
+
 // simple dispatching algorithm
 int hammer_dispatcher_next_worker_id()
 {
@@ -22,7 +26,7 @@ int hammer_dispatcher_next_worker_id()
 	pre_id = id;
 	id = -1;
 
-	for (i = pre_id + 1; i < config->workers; i ++) {
+	for (i = pre_id + 1; i < config->worker_num; i ++) {
 		sched = &(sched_set[i]);
 		if (sched->if_want_new == HAMMER_SCHED_WANT_NEW) {
 			id = i;
@@ -51,7 +55,7 @@ int hammer_dispatcher_next_worker_id()
 
 int hammer_dispatcher_loop(int server_fd)
 {
-	int ret, remote_fd, worker_id = 0;
+	int worker_id = 0;
 	hammer_sched_t *sched;
 	hammer_connection_t *c;
 
@@ -74,7 +78,7 @@ int hammer_dispatcher_loop(int server_fd)
 		sched = &(sched_set[worker_id]);
 
 		/* Assign connection to worker thread */
-		hammer_sched_add_connection(c, sched, HAMMER_CONN_ACCEPTED);
+		hammer_sched_add_connection(c, sched);
 	}
 
 	return 0;
