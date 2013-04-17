@@ -14,7 +14,6 @@ typedef struct hammer_config_s {
 	char *server_ip;
 	unsigned int server_port;
 
-	char *listen_ip;
 	unsigned int listen_port;
 
 	unsigned int conn_buffer_size;

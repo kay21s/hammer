@@ -142,7 +142,7 @@ void *hammer_gpu_worker_loop(void *c)
 
 	/* Set affinity of this gpu worker */
 	mask = 1 << core_id;
-	if (sched_setaffinity(0, sizeof(unsigned long), &mask) < 0) {
+	if (sched_setaffinity(0, sizeof(unsigned long), (cpu_set_t *)&mask) < 0) {
 		hammer_err("Err set affinity in GPU worker\n");
 		exit(0);
 	}

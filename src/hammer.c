@@ -54,17 +54,11 @@ int hammer_init_config()
 	config->worker_num = config->cpu_worker_num + config->gpu_worker_num;
 	config->epoll_max_events = 128;
 
-	length = strlen("219.219.216.11");
+	length = strlen("219.219.216.106");
 	config->server_ip = (char *)malloc(length);
-	memcpy(config->server_ip, "219.219.216.11", length);
-	config->server_port = 80;
-
-	length = strlen("127.0.0.1");
-	config->listen_ip = (char *)malloc(length);
-	memcpy(config->listen_ip, "127.0.0.1", length);
-	config->listen_port = 80;
-
-	config->conn_buffer_size = 4096;
+	memcpy(config->server_ip, "219.219.216.106", length);
+	config->server_port = 12222;
+	config->listen_port = 12222;
 
 	config->core_ids = (unsigned int *)hammer_mem_malloc(config->worker_num * sizeof(unsigned int));
 	for (i = 0; i < config->worker_num; i ++) {
@@ -82,6 +76,10 @@ int hammer_init_config()
 	   */
 	config->batch_buf_max_size = config->I * 1.25 * 1000; // byte
 	config->batch_job_max_num = 1000;
+
+	config->cpu_job_max_num = 1000;
+	config->cpu_conn_max_num = 200;
+	config->conn_buffer_size = 4096;
 
 	config->aes_key_size = 16; // 128/8 byte
 	config->iv_size = 16; // 128/8 byte

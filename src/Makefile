@@ -1,6 +1,6 @@
 CC = gcc
 
-CFLAGS = -Wall -g -Wall -D__USE_GNU
+CFLAGS = -Wall -g -D__USE_GNU -D_GNU_SOURCE -DHAMMER_MALLOC
 LIBS = -lrt -lpthread -L../libgpucrypto/lib -lgpucrypto
 
 #OPENSSL_DIR = ../openssl-1.0.1c

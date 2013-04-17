@@ -61,18 +61,19 @@ int hammer_handler_listen()
 
 	proxy_address.sin_family = AF_INET;
 	//proxy_address.sin_addr.s_addr = inet_addr(config->listen_ip);
+	proxy_address.sin_addr.s_addr = htonl(INADDR_ANY);
 	proxy_address.sin_port = htons(config->listen_port);
 
 	ret = hammer_socket_bind(socket, (struct sockaddr *)&proxy_address, sizeof(proxy_address));
 	if (ret == -1) {
 		hammer_warn("error bind socket\n");
-		return -1;
+		exit(0);
 	}
 
 	ret = hammer_socket_listen(socket, HAMMER_MAX_CONN);
 	if (ret == -1) {
 		hammer_warn("error listen socket\n");
-		return -1;
+		exit(0);
 	}
 	return socket;
 }
